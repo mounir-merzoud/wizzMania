@@ -1,0 +1,21 @@
+name: Branch Naming Convention
+
+on:
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  check-branch-name:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate branch name
+        run: |
+          BRANCH_NAME="${{ github.head_ref }}"
+          if [[ ! "$BRANCH_NAME" =~ ^(feature|bugfix)\/[A-Z]{2}_[0-9]{2}-[0-9]{2}-[0-9]{4}_.+ ]]; then
+            echo "❌ Branch name '$BRANCH_NAME' does not follow convention"
+            echo "✅ Expected formats:"
+            echo "   feature/MM_dd-mm-yyyy_description"
+            echo "   bugfix/MM_dd-mm-yyyy_description"
+            exit 1
+          fi
+
