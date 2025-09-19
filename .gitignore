@@ -44,6 +44,14 @@ install_manifest.txt
 compile_commands.json
 Makefile
 
+# --- Node.js ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+
 # --- Binaries ---
 *.exe
 *.out
@@ -51,6 +59,10 @@ Makefile
 *.so
 *.dylib
 *.obj
+*.o
+*.a
+core
+main
 
 # --- Logs ---
 *.log
@@ -69,3 +81,5 @@ Makefile
 *.swp
 .DS_Store
 Thumbs.db
+
+.gitignore
