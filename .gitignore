@@ -63,6 +63,8 @@ yarn-error.log*
 *.a
 core
 main
+medical_server
+medical_client
 
 # --- Logs ---
 *.log
