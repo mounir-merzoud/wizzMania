@@ -1,6 +1,29 @@
-### AL ###
-#Template for AL projects for Dynamics 365 Business Central
-#launch.json folder
+# --- Build ---
+/build/
+/*/build/
+
+# --- CMake ---
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+Makefile
+
+# --- Binaries ---
+*.exe
+*.out
+*.dll
+*.so
+*.dylib
+*.obj
+
+# --- Logs ---
+*.log
+
+# --- VS Code ---
 .vscode/
 
 #Cache folder
