@@ -108,3 +108,11 @@ medical_client
 Thumbs.db
 
 .gitignore
+
+
+*.key
+*.pem
+*.p12
+*.crt
+secrets/
+keys/
