@@ -1,0 +1,24 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: securecloud-db
+    restart: always
+    environment:
+      POSTGRES_USER: secureuser
+      POSTGRES_PASSWORD: securepass
+      POSTGRES_DB: securecloud
+    volumes:
+      - ./data:/var/lib/postgresql/data
+      - ./init/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    ports:
+      - "5432:5432"
+
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: securecloud-pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: merzoudmounir92@gmail.com
+      PGADMIN_DEFAULT_PASSWORD: securepass
+    ports:
+      - "5050:80"
