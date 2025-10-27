@@ -22,6 +22,9 @@ Makefile
 
 # --- Logs ---
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # --- VS Code ---
 .vscode/
@@ -107,12 +110,18 @@ medical_client
 .DS_Store
 Thumbs.db
 
-.gitignore
+# --- Docker ---
+data/
+pgadmin-data/
+volumes/
+init/*.log
+*.pid
+*.sock
+*.tmp
+docker-compose.override.yml
 
-
-*.key
-*.pem
-*.p12
-*.crt
-secrets/
-keys/
+# --- Environment files ---
+.env
+.env.local
+.env.development
+.env.production

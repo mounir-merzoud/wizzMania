@@ -11,9 +11,7 @@
 #define CPPHTTPLIB_VERSION "0.26.0"
 #define CPPHTTPLIB_VERSION_NUM "0x001A00"
 
-/*
- * Platform compatibility check
- */
+
 
 #if defined(_WIN32) && !defined(_WIN64)
 #if defined(_MSC_VER)
@@ -38,9 +36,7 @@
 #endif
 #endif
 
-/*
- * Configuration
- */
+
 
 #ifndef CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND
 #define CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND 5
@@ -185,9 +181,6 @@
 #define CPPHTTPLIB_MAX_LINE_LENGTH 32768
 #endif
 
-/*
- * Headers
- */
 
 #ifdef _WIN32
 #ifndef _CRT_SECURE_NO_WARNINGS
@@ -312,15 +305,12 @@ using socket_t = int;
 #include <CFNetwork/CFHost.h>
 #include <CoreFoundation/CoreFoundation.h>
 #endif
-#endif // CPPHTTPLIB_USE_NON_BLOCKING_GETADDRINFO or
-       // CPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN
+#endif 
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
 #ifdef _WIN32
 #include <wincrypt.h>
 
-// these are defined in wincrypt.h and it breaks compilation if BoringSSL is
-// used
 #undef X509_NAME
 #undef X509_CERT_PAIR
 #undef X509_EXTENSIONS

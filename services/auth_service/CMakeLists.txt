@@ -4,7 +4,12 @@ project(auth_service LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Trouve les paquets via vcpkg
+# --- Fix spécifique à MSVC ---
+if(MSVC)
+    add_compile_options(/Zc:__cplusplus)
+endif()
+
+# --- Dépendances (via vcpkg sur Windows, brew sur macOS) ---
 find_package(Protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 
@@ -32,9 +37,17 @@ add_custom_command(
     VERBATIM
 )
 
-# --- Cible serveur ---
-add_executable(auth_service
-    src/auth_service.cpp
+# --- Sources C++ ---
+set(SOURCES
+    src/main.cpp
+    src/AuthManager.cpp
+    src/AuthServiceImpl.cpp
+    ${PROTO_SRCS}
+    ${GRPC_SRCS}
+)
+
+add_executable(auth_test_client
+    src/auth_test_client.cpp
     ${PROTO_SRCS}
     ${GRPC_SRCS}
 )
@@ -45,7 +58,18 @@ target_include_directories(auth_service
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
+target_include_directories(auth_test_client
+    PRIVATE
+        ${GENERATED_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
 target_link_libraries(auth_service
+    gRPC::grpc++
+    protobuf::libprotobuf
+)
+
+target_link_libraries(auth_test_client
     gRPC::grpc++
     protobuf::libprotobuf
 )
