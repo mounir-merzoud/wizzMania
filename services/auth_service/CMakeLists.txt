@@ -39,13 +39,30 @@ add_executable(auth_service
     ${GRPC_SRCS}
 )
 
+add_executable(auth_test_client
+    src/auth_test_client.cpp
+    ${PROTO_SRCS}
+    ${GRPC_SRCS}
+)
+
 target_include_directories(auth_service
     PRIVATE
         ${GENERATED_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
+target_include_directories(auth_test_client
+    PRIVATE
+        ${GENERATED_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
 target_link_libraries(auth_service
+    gRPC::grpc++
+    protobuf::libprotobuf
+)
+
+target_link_libraries(auth_test_client
     gRPC::grpc++
     protobuf::libprotobuf
 )
