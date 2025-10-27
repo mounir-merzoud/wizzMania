@@ -1,0 +1,38 @@
+name: Run Tests
+
+on:
+  push:
+    branches:
+      - main
+      - feature/**
+      - bugfix/**
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            pkg-config \
+            libprotobuf-dev \
+            protobuf-compiler \
+            libgrpc-dev \
+            libgrpc++-dev \
+            netcat-openbsd
+
+      - name: Ensure test scripts are executable
+        run: chmod +x test/*.sh
+
+      - name: Run auth tests
+        run: test/test_auth_basic.sh
+
+      - name: Run messaging tests
+        run: test/test_unit1.sh
