@@ -52,6 +52,16 @@ add_executable(auth_test_client
     ${GRPC_SRCS}
 )
 
+set(HEADERS
+    src/AuthManager.h
+    src/AuthServiceImpl.h
+    ${PROTO_HDRS}
+    ${GRPC_HDRS}
+)
+
+# --- Cible serveur ---
+add_executable(auth_service ${SOURCES} ${HEADERS})
+
 target_include_directories(auth_service
     PRIVATE
         ${GENERATED_DIR}
