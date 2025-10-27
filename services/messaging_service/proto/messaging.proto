@@ -1,0 +1,34 @@
+syntax = "proto3";
+package securecloud.messaging;
+
+message EncryptedMessage {
+  string message_id = 1;
+  string conversation_id = 2;
+  string sender_id = 3;
+  bytes ciphertext = 4;    // Contenu chiffré (E2E)
+  bytes nonce = 5;         // Nonce/IV utilisé côté client
+  int64 timestamp_unix = 6;
+}
+
+message SendAck {
+  string message_id = 1;
+  bool accepted = 2;
+}
+
+message HistoryRequest {
+  string conversation_id = 1;
+  int32 limit = 2;
+}
+
+message HistoryResponse {
+  repeated EncryptedMessage messages = 1;
+}
+
+service MessagingService {
+  // Envoi d’un message (push simple)
+  rpc SendMessage(EncryptedMessage) returns (SendAck);
+  // Récupération historique
+  rpc GetHistory(HistoryRequest) returns (HistoryResponse);
+  // Stream bidirectionnel temps réel
+  rpc ChatStream(stream EncryptedMessage) returns (stream EncryptedMessage);
+}

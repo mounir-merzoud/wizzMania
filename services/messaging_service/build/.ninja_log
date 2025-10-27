@@ -1,0 +1,17 @@
+# ninja log v7
+3	79	1758554745475046291	generated/messaging.pb.cc	3ce073f25017bdb3
+3	79	1758554745475046291	generated/messaging.pb.h	3ce073f25017bdb3
+3	79	1758554745475046291	generated/messaging.grpc.pb.cc	3ce073f25017bdb3
+3	79	1758554745475046291	generated/messaging.grpc.pb.h	3ce073f25017bdb3
+3	79	1758554745475046291	/Users/mathisserra/Desktop/Github/B3_Laplateforme/wizzMania/services/messaging_service/build/generated/messaging.pb.cc	3ce073f25017bdb3
+3	79	1758554745475046291	/Users/mathisserra/Desktop/Github/B3_Laplateforme/wizzMania/services/messaging_service/build/generated/messaging.pb.h	3ce073f25017bdb3
+3	79	1758554745475046291	/Users/mathisserra/Desktop/Github/B3_Laplateforme/wizzMania/services/messaging_service/build/generated/messaging.grpc.pb.cc	3ce073f25017bdb3
+3	79	1758554745475046291	/Users/mathisserra/Desktop/Github/B3_Laplateforme/wizzMania/services/messaging_service/build/generated/messaging.grpc.pb.h	3ce073f25017bdb3
+80	1086	1758554745476780962	CMakeFiles/test_client.dir/generated/messaging.pb.cc.o	6d8f98ba9f331a36
+79	1097	1758554745476406628	CMakeFiles/messaging_service.dir/generated/messaging.pb.cc.o	29266ebc0c6514b2
+80	1591	1758554745476664962	CMakeFiles/test_client.dir/src/test_client.cpp.o	bd3f69aa74b4f27a
+79	1606	1758554745476091169	CMakeFiles/messaging_service.dir/src/messaging_service.cpp.o	df282b075f201794
+80	1825	1758554745476545961	CMakeFiles/messaging_service.dir/generated/messaging.grpc.pb.cc.o	e622e8fc5a700a3b
+80	1836	1758554745476897712	CMakeFiles/test_client.dir/generated/messaging.grpc.pb.cc.o	e947436b83ad1fed
+1825	1877	1758554747221887708	messaging_service	1f4e4f12e29c2031
+1837	1886	1758554747233464650	test_client	103deea687757335
