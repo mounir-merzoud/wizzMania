@@ -30,21 +30,21 @@ jobs:
       - name: Check running containers
         run: docker ps -a
 
-      # 6) Vérifier que PostgreSQL est prêt
-     - name: Wait for PostgreSQL to be ready
-  run: |
-    echo "⏳ Waiting for PostgreSQL to start..."
-    for i in {1..20}; do
-      if docker exec securecloud-db pg_isready -U secureuser -d securecloud; then
-        echo "✅ PostgreSQL is ready!"
-        exit 0
-      fi
-      echo "PostgreSQL not ready yet... retry $i/20"
-      sleep 3
-    done
-    echo "❌ PostgreSQL did not start in time"
-    docker logs securecloud-db
-    exit 1
+      # 6) Attendre que PostgreSQL soit prêt
+      - name: Wait for PostgreSQL to be ready
+        run: |
+          echo "⏳ Waiting for PostgreSQL to start..."
+          for i in {1..20}; do
+            if docker exec securecloud-db pg_isready -U secureuser -d securecloud; then
+              echo "✅ PostgreSQL is ready!"
+              exit 0
+            fi
+            echo "PostgreSQL not ready yet... retry $i/20"
+            sleep 3
+          done
+          echo "❌ PostgreSQL did not start in time"
+          docker logs securecloud-db
+          exit 1
 
       # 7) Arrêt + nettoyage
       - name: Shutdown
