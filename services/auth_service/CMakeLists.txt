@@ -112,9 +112,20 @@ add_executable(auth_test_client
     ${GRPC_SRCS}
 )
 
-set(_COMMON_INCLUDES
-    ${GENERATED_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
+set(HEADERS
+    src/AuthManager.h
+    src/AuthServiceImpl.h
+    ${PROTO_HDRS}
+    ${GRPC_HDRS}
+)
+
+# --- Cible serveur ---
+add_executable(auth_service ${SOURCES} ${HEADERS})
+
+target_include_directories(auth_service
+    PRIVATE
+        ${GENERATED_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 if(Protobuf_INCLUDE_DIRS)

@@ -1,0 +1,52 @@
+name: 🐳 SecureCloud Docker CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1) Récupérer le code du repo
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2) (Optionnel) si ton docker-compose n'est PAS à la racine,
+      #    dé-commente la ligne 'working-directory' ci-dessous
+      # working-directory: ./docker-setup
+
+      # 3) Vérifier la syntaxe du docker-compose
+      - name: Validate Docker Compose syntax
+        run: docker compose config -q
+
+      # 4) Lancer les conteneurs
+      - name: Run Docker Compose
+        run: docker compose up -d
+
+      # 5) Vérifier que les conteneurs tournent
+      - name: Check running containers
+        run: docker ps -a
+
+      # 6) Attendre que PostgreSQL soit prêt
+      - name: Wait for PostgreSQL to be ready
+        run: |
+          echo "⏳ Waiting for PostgreSQL to start..."
+          for i in {1..20}; do
+            if docker exec securecloud-db pg_isready -U secureuser -d securecloud; then
+              echo "✅ PostgreSQL is ready!"
+              exit 0
+            fi
+            echo "PostgreSQL not ready yet... retry $i/20"
+            sleep 3
+          done
+          echo "❌ PostgreSQL did not start in time"
+          docker logs securecloud-db
+          exit 1
+
+      # 7) Arrêt + nettoyage
+      - name: Shutdown
+        run: docker compose down -v
+
