@@ -1,0 +1,6 @@
+build/
+CMakeFiles/
+*.o
+*.obj
+*.lo
+*.rej
