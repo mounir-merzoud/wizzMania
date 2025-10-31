@@ -49,3 +49,4 @@ jobs:
       # 7) Arrêt + nettoyage
       - name: Shutdown
         run: docker compose down -v
+

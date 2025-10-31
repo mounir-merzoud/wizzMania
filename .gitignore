@@ -119,6 +119,7 @@ init/*.log
 *.sock
 *.tmp
 docker-compose.override.yml
+files_storage/
 
 # --- Environment files ---
 .env
