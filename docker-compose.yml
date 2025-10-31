@@ -1,4 +1,37 @@
 services:
+  auth_service:
+    build: ./services/auth_service
+    container_name: securecloud-auth
+    restart: unless-stopped
+    environment:
+      FILE_SERVICE_ADDRESS: file_service:50052
+    ports:
+      - "50051:50051"
+    depends_on:
+      - postgres
+
+  messaging_service:
+    build: ./services/messaging_service
+    container_name: securecloud-messaging
+    restart: unless-stopped
+    ports:
+      - "7002:7002"
+    depends_on:
+      - auth_service
+
+  file_service:
+    build: ./services/file_service
+    container_name: securecloud-file
+    restart: unless-stopped
+    environment:
+      FILE_SERVICE_STORAGE: /data/files
+    volumes:
+      - ./files_storage:/data/files
+    ports:
+      - "50052:50052"
+    depends_on:
+      - postgres
+
   postgres:
     image: postgres:16
     container_name: securecloud-db

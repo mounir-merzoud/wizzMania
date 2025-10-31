@@ -1,9 +1,8 @@
 cmake_minimum_required(VERSION 3.15)
-project(messaging_service LANGUAGES CXX)
+project(file_service LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0")
 
 find_package(Protobuf CONFIG QUIET)
 if(NOT Protobuf_FOUND)
@@ -47,14 +46,14 @@ else()
   endif()
 endif()
 
-set(PROTO_FILE ${CMAKE_CURRENT_SOURCE_DIR}/proto/messaging.proto)
+set(PROTO_FILE ${CMAKE_CURRENT_SOURCE_DIR}/proto/file_service.proto)
 set(GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 file(MAKE_DIRECTORY ${GEN_DIR})
 
-set(PROTO_SRCS ${GEN_DIR}/messaging.pb.cc)
-set(PROTO_HDRS ${GEN_DIR}/messaging.pb.h)
-set(GRPC_SRCS ${GEN_DIR}/messaging.grpc.pb.cc)
-set(GRPC_HDRS ${GEN_DIR}/messaging.grpc.pb.h)
+set(PROTO_SRCS ${GEN_DIR}/file_service.pb.cc)
+set(PROTO_HDRS ${GEN_DIR}/file_service.pb.h)
+set(GRPC_SRCS ${GEN_DIR}/file_service.grpc.pb.cc)
+set(GRPC_HDRS ${GEN_DIR}/file_service.grpc.pb.h)
 
 add_custom_command(
   OUTPUT ${PROTO_SRCS} ${PROTO_HDRS} ${GRPC_SRCS} ${GRPC_HDRS}
@@ -68,14 +67,15 @@ add_custom_command(
   VERBATIM
 )
 
-add_executable(messaging_service
-  src/messaging_service.cpp
+add_executable(file_service
+  src/FileServiceImpl.cpp
+  src/main.cpp
   ${PROTO_SRCS}
   ${GRPC_SRCS}
 )
 
-add_executable(test_client
-  src/test_client.cpp
+add_executable(file_service_test_client
+  src/FileServiceTestClient.cpp
   ${PROTO_SRCS}
   ${GRPC_SRCS}
 )
@@ -93,19 +93,17 @@ if(gRPC_INCLUDE_DIRS)
   list(APPEND _COMMON_INCLUDES ${gRPC_INCLUDE_DIRS})
 endif()
 
-target_include_directories(messaging_service PRIVATE ${_COMMON_INCLUDES})
-target_include_directories(test_client PRIVATE ${_COMMON_INCLUDES})
+target_include_directories(file_service PRIVATE ${_COMMON_INCLUDES})
+target_include_directories(file_service_test_client PRIVATE ${_COMMON_INCLUDES})
 
-target_link_libraries(messaging_service
+target_link_libraries(file_service
   PRIVATE
     ${_GRPC_GRPCPP_LIB}
     ${_PROTOBUF_LIB}
-  pthread
 )
 
-target_link_libraries(test_client
+target_link_libraries(file_service_test_client
   PRIVATE
     ${_GRPC_GRPCPP_LIB}
     ${_PROTOBUF_LIB}
-  pthread
 )

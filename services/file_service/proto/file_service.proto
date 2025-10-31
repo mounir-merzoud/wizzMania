@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package securecloud.files;
+
+// Service gRPC dédié à la gestion de fichiers chiffrés
+service FileService {
+  // Upload en flux de plusieurs chunks pour supporter les gros fichiers
+  rpc Upload(stream UploadChunk) returns (UploadAck);
+  // Télécharge un fichier sous forme de flux de chunks
+  rpc Download(DownloadRequest) returns (stream DownloadChunk);
+  // Suppression logique d'un fichier
+  rpc Delete(DeleteRequest) returns (DeleteResponse);
+  // Récupère les métadonnées d'un fichier
+  rpc GetMetadata(MetadataRequest) returns (FileMetadata);
+}
+
+message UploadChunk {
+  string conversation_id = 1;
+  string owner_id = 2;
+  string file_name = 3;
+  string media_type = 4;
+  bytes cipher_chunk = 5;
+  bool last_chunk = 6;
+  int64 declared_size = 7; // taille totale attendue, répétée pour chaque chunk
+}
+
+message UploadAck {
+  string file_id = 1;
+  int64 stored_size = 2;
+}
+
+message DownloadRequest {
+  string file_id = 1;
+  string requester_id = 2;
+}
+
+message DownloadChunk {
+  bytes cipher_chunk = 1;
+  bool last_chunk = 2;
+}
+
+message DeleteRequest {
+  string file_id = 1;
+  string requester_id = 2;
+}
+
+message DeleteResponse {
+  bool success = 1;
+}
+
+message MetadataRequest {
+  string file_id = 1;
+}
+
+message FileMetadata {
+  string file_id = 1;
+  string conversation_id = 2;
+  string owner_id = 3;
+  string file_name = 4;
+  string media_type = 5;
+  int64 size_bytes = 6;
+  int64 created_at_epoch = 7;
+  bool deleted = 8;
+}
