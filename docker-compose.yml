@@ -44,7 +44,7 @@ services:
       - ./data:/var/lib/postgresql/data
       - ./init/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     ports:
-      - "5432:5432"
+      - "5433:5432"
 
   pgadmin:
     image: dpage/pgadmin4:8
