@@ -1,0 +1,54 @@
+# Created at 2025-12-01T16:20:48.588
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '[0;32m🔧 Compilation du service de messagerie...[0m '.
+
+# Created at 2025-12-01T16:20:48.591
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '-- Found RE2 via CMake.'.
+
+# Created at 2025-12-01T16:20:48.619
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '-- Configuring done (0.1s)'.
+
+# Created at 2025-12-01T16:20:48.619
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '-- Generating done (0.0s)'.
+
+# Created at 2025-12-01T16:20:48.647
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '-- Build files have been written to: /Users/mathisserra/Desktop/Github/B3_Laplateforme/wizzMania/services/messaging_service/build'.
+
+# Created at 2025-12-01T16:20:48.647
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '[ 20%] Generating generated/messaging.pb.cc, generated/messaging.pb.h, generated/messaging.grpc.pb.cc, generated/messaging.grpc.pb.h'.
+
+# Created at 2025-12-01T16:20:48.900
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '[ 20%] Generating generated/messaging.pb.cc, generated/messaging.pb.h, generated/messaging.grpc.pb.cc, generated/messaging.grpc.pb.h'.
+
+# Created at 2025-12-01T16:20:48.901
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '[ 30%] Building CXX object CMakeFiles/test_client.dir/src/test_client.cpp.o'.
+
+# Created at 2025-12-01T16:20:48.901
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '[ 60%] Building CXX object CMakeFiles/messaging_service.dir/src/messaging_service.cpp.o'.
+
+# Created at 2025-12-01T16:20:48.901
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '[ 60%] Building CXX object CMakeFiles/messaging_service.dir/generated/messaging.pb.cc.o'.
+
+# Created at 2025-12-01T16:20:48.901
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '[ 60%] Building CXX object CMakeFiles/messaging_service.dir/generated/messaging.grpc.pb.cc.o'.
+
+# Created at 2025-12-01T16:20:48.902
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '[ 70%] Building CXX object CMakeFiles/test_client.dir/generated/messaging.grpc.pb.cc.o'.
+
+# Created at 2025-12-01T16:20:51.118
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '[ 80%] Building CXX object CMakeFiles/test_client.dir/generated/messaging.pb.cc.o'.
+
+# Created at 2025-12-01T16:20:51.128
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '[ 90%] Linking CXX executable messaging_service'.
+
+# Created at 2025-12-01T16:20:51.267
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '[100%] Linking CXX executable test_client'.
+
+# Created at 2025-12-01T16:20:51.267
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '[100%] Built target test_client'.
+
+# Created at 2025-12-01T16:20:51.272
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '[100%] Built target messaging_service'.
+
+# Created at 2025-12-01T16:20:51.277
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '[0;32m✅ Service de messagerie compilé[0m '.
+

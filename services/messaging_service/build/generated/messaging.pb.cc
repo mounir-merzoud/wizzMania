@@ -220,13 +220,15 @@ const char descriptor_table_protodef_messaging_2eproto[] ABSL_ATTRIBUTE_SECTION_
     "toryRequest\032&.securecloud.messaging.Hist"
     "oryResponse\022b\n\nChatStream\022\'.securecloud."
     "messaging.EncryptedMessage\032\'.securecloud"
-    ".messaging.EncryptedMessage(\0010\001b\006proto3"
+    ".messaging.EncryptedMessage(\0010\001B)\n\025secur"
+    "ecloud.messagingB\016MessagingProtoP\001b\006prot"
+    "o3"
 };
 static ::absl::once_flag descriptor_table_messaging_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_messaging_2eproto = {
     false,
     false,
-    679,
+    722,
     descriptor_table_protodef_messaging_2eproto,
     "messaging.proto",
     &descriptor_table_messaging_2eproto_once,
