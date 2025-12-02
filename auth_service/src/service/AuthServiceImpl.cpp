@@ -21,6 +21,13 @@ Status AuthServiceImpl::RegisterUser(ServerContext* context,
 
         std::cout << "[AuthService] RegisterUser: email=" << email << std::endl;
 
+        // Validation basique des champs requis
+        if (fullName.empty() || email.empty() || password.empty()) {
+            response->set_success(false);
+            response->set_message("Champs requis manquants.");
+            return Status(StatusCode::INVALID_ARGUMENT, "Missing required fields");
+        }
+
         // Vérifie si l'utilisateur existe déjà
         if (database_->userExists(email)) {
             std::cout << "[AuthService] RegisterUser: already exists" << std::endl;

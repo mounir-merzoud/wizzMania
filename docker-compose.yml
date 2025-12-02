@@ -1,19 +1,26 @@
 services:
   auth_service:
-    build: ./services/auth_service
+    build:
+      context: ./auth_service
+      dockerfile: Dockerfile
     container_name: securecloud-auth
     restart: unless-stopped
+    env_file: .env
     environment:
       FILE_SERVICE_ADDRESS: file_service:50052
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      POSTGRES_CONN: ${DATABASE_URL}
     ports:
       - "50051:50051"
-    depends_on:
-      - postgres
 
   messaging_service:
     build: ./services/messaging_service
     container_name: securecloud-messaging
     restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
     ports:
       - "7002:7002"
     depends_on:
@@ -23,35 +30,37 @@ services:
     build: ./services/file_service
     container_name: securecloud-file
     restart: unless-stopped
+    env_file: .env
     environment:
       FILE_SERVICE_STORAGE: /data/files
+      DATABASE_URL: ${DATABASE_URL}
     volumes:
       - ./files_storage:/data/files
     ports:
       - "50052:50052"
-    depends_on:
-      - postgres
 
-  postgres:
-    image: postgres:16
-    container_name: securecloud-db
-    restart: always
-    environment:
-      POSTGRES_USER: secureuser
-      POSTGRES_PASSWORD: securepass
-      POSTGRES_DB: securecloud
-    volumes:
-      - ./data:/var/lib/postgresql/data
-      - ./init/schema.sql:/docker-entrypoint-initdb.d/schema.sql
-    ports:
-      - "5433:5432"
-
-  pgadmin:
-    image: dpage/pgadmin4:8
-    container_name: securecloud-pgadmin
-    restart: always
-    environment:
-      PGADMIN_DEFAULT_EMAIL: merzoudmounir92@gmail.com
-      PGADMIN_DEFAULT_PASSWORD: securepass
-    ports:
-      - "5050:80"
+# Les services Postgres et PgAdmin locaux sont maintenant inutiles avec Neon
+# Tu peux les commenter ou les supprimer :
+#  postgres:
+#    image: postgres:16
+#    container_name: securecloud-db
+#    restart: always
+#    environment:
+#      POSTGRES_USER: secureuser
+#      POSTGRES_PASSWORD: securepass
+#      POSTGRES_DB: securecloud
+#    volumes:
+#      - ./data:/var/lib/postgresql/data
+#      - ./init/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+#    ports:
+#      - "5433:5432"
+#
+#  pgadmin:
+#    image: dpage/pgadmin4:8
+#    container_name: securecloud-pgadmin
+#    restart: always
+#    environment:
+#      PGADMIN_DEFAULT_EMAIL: merzoudmounir92@gmail.com
+#      PGADMIN_DEFAULT_PASSWORD: securepass
+#    ports:
+#      - "5050:80"

@@ -11,7 +11,11 @@ struct UserRecord {
 
 class Database {
 private:
-    pqxx::connection conn;
+    std::string connStr_;            // original connection string (for reconnect)
+    pqxx::connection conn;           // active connection
+
+    // Assure qu'une connexion ouverte est disponible, sinon tente une reconnexion.
+    void ensureConnection();
 
 public:
     explicit Database(const std::string& connStr);
