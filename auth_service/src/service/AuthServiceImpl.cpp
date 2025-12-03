@@ -89,13 +89,30 @@ Status AuthServiceImpl::Login(ServerContext* context,
             return Status(StatusCode::UNAUTHENTICATED, "Mot de passe incorrect");
         }
 
-        std::string token = authManager_->generateToken(std::to_string(user.id));
+        // Récupérer les permissions de l'utilisateur
+        std::vector<std::string> permissions = database_->getUserPermissions(user.id);
+        
+        // Générer un token enrichi avec rôle et permissions
+        std::string token = authManager_->generateTokenWithRole(
+            std::to_string(user.id), 
+            user.email, 
+            user.role_name, 
+            permissions
+        );
 
-        // Remplir la réponse selon le proto
+        // Remplir la réponse selon le proto enrichi
         response->set_access_token(token);
-        response->set_refresh_token(""); // non implémenté pour l’instant
+        response->set_refresh_token(""); // non implémenté pour l'instant
         response->set_expires_in(86400);  // 24h (en secondes)
-        std::cout << "[AuthService] Login: success" << std::endl;
+        response->set_role(user.role_name);
+        
+        // Ajouter les permissions à la réponse
+        for (const auto& perm : permissions) {
+            response->add_permissions(perm);
+        }
+        
+        std::cout << "[AuthService] Login: success, role=" << user.role_name 
+                  << ", permissions=" << permissions.size() << std::endl;
         return Status::OK;
     } catch (const std::exception& e) {
         std::cerr << "[AuthService] Login exception: " << e.what() << std::endl;
