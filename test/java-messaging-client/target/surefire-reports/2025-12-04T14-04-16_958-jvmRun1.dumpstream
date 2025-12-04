@@ -1,0 +1,24 @@
+# Created at 2025-12-04T14:04:17.425
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '[0;32m🔧 Compilation du service de messagerie...[0m '.
+
+# Created at 2025-12-04T14:04:17.428
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '-- Found RE2 via CMake.'.
+
+# Created at 2025-12-04T14:04:17.459
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '-- Configuring done (0.1s)'.
+
+# Created at 2025-12-04T14:04:17.459
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '-- Generating done (0.0s)'.
+
+# Created at 2025-12-04T14:04:17.562
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '-- Build files have been written to: /Users/mathisserra/Desktop/Github/B3_Laplateforme/wizzMania/services/messaging_service/build'.
+
+# Created at 2025-12-04T14:04:17.562
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '[100%] Built target messaging_service'.
+
+# Created at 2025-12-04T14:04:17.568
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '[100%] Built target test_client'.
+
+# Created at 2025-12-04T14:04:17.572
+Corrupted channel by directly writing to native stream in forked JVM 1. Stream '[0;32m✅ Service de messagerie compilé[0m '.
+

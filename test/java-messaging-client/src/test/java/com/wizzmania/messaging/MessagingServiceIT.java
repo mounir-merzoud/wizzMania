@@ -70,7 +70,7 @@ public class MessagingServiceIT {
         pb.directory(BUILD_DIR.toFile());
         pb.redirectErrorStream(true);
         this.serverProcess = pb.start();
-        Thread.sleep(Duration.ofMillis(1200));
+    Thread.sleep(1200);
         if (!serverProcess.isAlive()) {
             throw new IllegalStateException("Le serveur messaging ne s'est pas lancé correctement");
         }
