@@ -21,6 +21,13 @@ Status AuthServiceImpl::RegisterUser(ServerContext* context,
 
         std::cout << "[AuthService] RegisterUser: email=" << email << std::endl;
 
+        // Validation basique des champs requis
+        if (fullName.empty() || email.empty() || password.empty()) {
+            response->set_success(false);
+            response->set_message("Champs requis manquants.");
+            return Status(StatusCode::INVALID_ARGUMENT, "Missing required fields");
+        }
+
         // Vérifie si l'utilisateur existe déjà
         if (database_->userExists(email)) {
             std::cout << "[AuthService] RegisterUser: already exists" << std::endl;
@@ -32,9 +39,10 @@ Status AuthServiceImpl::RegisterUser(ServerContext* context,
         // Hash mot de passe
     std::string hashedPassword = PasswordHasher::hashPassword(password);
 
-        // Enregistre utilisateur
+        // Enregistre utilisateur avec rôle par défaut
+        std::string roleName = !request->role_name().empty() ? request->role_name() : "user";
         try {
-            database_->registerUser(fullName, email, hashedPassword);
+            database_->registerUserWithRole(fullName, email, hashedPassword, roleName);
         } catch (const pqxx::sql_error& se) {
             std::cerr << "[AuthService] RegisterUser SQL error: " << se.what() << std::endl;
             response->set_success(false);
@@ -82,13 +90,30 @@ Status AuthServiceImpl::Login(ServerContext* context,
             return Status(StatusCode::UNAUTHENTICATED, "Mot de passe incorrect");
         }
 
-        std::string token = authManager_->generateToken(std::to_string(user.id));
+        // Récupérer les permissions de l'utilisateur
+        std::vector<std::string> permissions = database_->getUserPermissions(user.id);
+        
+        // Générer un token enrichi avec rôle et permissions
+        std::string token = authManager_->generateTokenWithRole(
+            std::to_string(user.id), 
+            user.email, 
+            user.role_name, 
+            permissions
+        );
 
-        // Remplir la réponse selon le proto
+        // Remplir la réponse selon le proto enrichi
         response->set_access_token(token);
-        response->set_refresh_token(""); // non implémenté pour l’instant
+        response->set_refresh_token(""); // non implémenté pour l'instant
         response->set_expires_in(86400);  // 24h (en secondes)
-        std::cout << "[AuthService] Login: success" << std::endl;
+        response->set_role(user.role_name);
+        
+        // Ajouter les permissions à la réponse
+        for (const auto& perm : permissions) {
+            response->add_permissions(perm);
+        }
+        
+        std::cout << "[AuthService] Login: success, role=" << user.role_name 
+                  << ", permissions=" << permissions.size() << std::endl;
         return Status::OK;
     } catch (const std::exception& e) {
         std::cerr << "[AuthService] Login exception: " << e.what() << std::endl;
@@ -114,4 +139,35 @@ Status AuthServiceImpl::ValidateToken(ServerContext* context,
         std::cerr << "[AuthService] ValidateToken exception: " << e.what() << std::endl;
         return Status(StatusCode::INTERNAL, e.what());
     }
+}
+
+// Méthodes RBAC - implémentations temporaires pour compilation
+Status AuthServiceImpl::RefreshToken(ServerContext* context,
+                                   const securecloud::auth::RefreshTokenRequest* request,
+                                   securecloud::auth::RefreshTokenResponse* response) {
+    return Status(StatusCode::UNIMPLEMENTED, "RefreshToken not implemented yet");
+}
+
+Status AuthServiceImpl::AssignRole(ServerContext* context,
+                                 const securecloud::auth::AssignRoleRequest* request,
+                                 securecloud::auth::AssignRoleResponse* response) {
+    return Status(StatusCode::UNIMPLEMENTED, "AssignRole not implemented yet");
+}
+
+Status AuthServiceImpl::CreateRole(ServerContext* context,
+                                 const securecloud::auth::CreateRoleRequest* request,
+                                 securecloud::auth::CreateRoleResponse* response) {
+    return Status(StatusCode::UNIMPLEMENTED, "CreateRole not implemented yet");
+}
+
+Status AuthServiceImpl::ListRoles(ServerContext* context,
+                                const securecloud::auth::ListRolesRequest* request,
+                                securecloud::auth::ListRolesResponse* response) {
+    return Status(StatusCode::UNIMPLEMENTED, "ListRoles not implemented yet");
+}
+
+Status AuthServiceImpl::GetUserPermissions(ServerContext* context,
+                                          const securecloud::auth::GetUserPermissionsRequest* request,
+                                          securecloud::auth::GetUserPermissionsResponse* response) {
+    return Status(StatusCode::UNIMPLEMENTED, "GetUserPermissions not implemented yet");
 }

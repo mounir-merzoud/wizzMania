@@ -2,22 +2,30 @@ syntax = "proto3";
 
 package securecloud.auth;
 
-// --- SERVICE D’AUTHENTIFICATION ---
+// --- SERVICE D'AUTHENTIFICATION ---
 service AuthService {
   rpc RegisterUser (RegisterRequest) returns (RegisterResponse);
   rpc Login (LoginRequest) returns (LoginResponse);
   rpc RefreshToken (RefreshTokenRequest) returns (RefreshTokenResponse);
   rpc ValidateToken (ValidateTokenRequest) returns (ValidateTokenResponse);
   rpc RevokeTokens (RevokeTokensRequest) returns (RevokeTokensResponse);
+  
+  // Gestion des rôles et permissions (admin seulement)
+  rpc AssignRole (AssignRoleRequest) returns (AssignRoleResponse);
+  rpc CreateRole (CreateRoleRequest) returns (CreateRoleResponse);
+  rpc ListRoles (ListRolesRequest) returns (ListRolesResponse);
+  rpc GetUserPermissions (GetUserPermissionsRequest) returns (GetUserPermissionsResponse);
 }
 
 // --- STRUCTURES DE DONNÉES ---
 
-// Inscription
+// Inscription (admin seulement)
 message RegisterRequest {
   string full_name = 1;
   string email = 2;
   string password = 3;
+  string admin_token = 4;  // Token de l'admin qui crée l'utilisateur
+  string role_name = 5;    // Rôle à assigner (optionnel, "user" par défaut)
 }
 
 message RegisterResponse {
@@ -36,6 +44,8 @@ message LoginResponse {
   string access_token = 1;
   string refresh_token = 2;
   int64 expires_in = 3;
+  string role = 4;              // Rôle de l'utilisateur
+  repeated string permissions = 5;  // Permissions de l'utilisateur
 }
 
 // Renouvellement de token
@@ -56,7 +66,9 @@ message ValidateTokenRequest {
 message ValidateTokenResponse {
   bool valid = 1;
   string user_id = 2;
-  repeated string permissions = 3;
+  string email = 3;
+  string role = 4;
+  repeated string permissions = 5;
 }
 
 // Révocation de tokens
@@ -66,4 +78,52 @@ message RevokeTokensRequest {
 
 message RevokeTokensResponse {
   bool success = 1;
+}
+
+// Gestion des rôles
+message AssignRoleRequest {
+  string admin_token = 1;
+  string user_email = 2;
+  string role_name = 3;
+}
+
+message AssignRoleResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message CreateRoleRequest {
+  string admin_token = 1;
+  string role_name = 2;
+  string description = 3;
+  repeated string permissions = 4;
+}
+
+message CreateRoleResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListRolesRequest {
+  string admin_token = 1;
+}
+
+message ListRolesResponse {
+  repeated Role roles = 1;
+}
+
+message Role {
+  string name = 1;
+  string description = 2;
+  repeated string permissions = 3;
+}
+
+message GetUserPermissionsRequest {
+  string admin_token = 1;
+  string user_email = 2;
+}
+
+message GetUserPermissionsResponse {
+  string role = 1;
+  repeated string permissions = 2;
 }

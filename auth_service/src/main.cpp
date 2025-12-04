@@ -93,14 +93,41 @@ void RunServer() {
     // Créer l’implémentation du service
     AuthServiceImpl service(authManager, database);
 
-    // Configurer et lancer le serveur
+    // Configurer et lancer le serveur avec vérification du port
     ServerBuilder builder;
-    builder.AddListeningPort(serverAddress, grpc::InsecureServerCredentials());
+    int boundPort = 0;
+    builder.AddListeningPort(serverAddress, grpc::InsecureServerCredentials(), &boundPort);
     builder.RegisterService(&service);
 
-    std::unique_ptr<Server> server(builder.BuildAndStart());
-    std::cout << "✅ Serveur lancé avec succès." << std::endl;
+    if (boundPort == 0) {
+        std::cerr << "❌ Échec de binding sur " << serverAddress << " (port occupé?). Tentative fallback..." << std::endl;
+        // Liste de ports fallback
+        const int fallbacks[] = {50061, 50071, 0}; // 0 = port dynamique choisi par OS
+        for (int p : fallbacks) {
+            ServerBuilder retryBuilder;
+            int retryPort = 0;
+            std::string addr = (p == 0) ? std::string("0.0.0.0:0") : ("0.0.0.0:" + std::to_string(p));
+            retryBuilder.AddListeningPort(addr, grpc::InsecureServerCredentials(), &retryPort);
+            retryBuilder.RegisterService(&service);
+            auto retryServer = retryBuilder.BuildAndStart();
+            if (retryServer && retryPort != 0) {
+                std::cout << "✅ Serveur lancé sur port fallback " << retryPort << std::endl;
+                retryServer->Wait();
+                return; // Sortir proprement
+            } else {
+                std::cerr << "⚠️ Échec fallback sur " << addr << std::endl;
+            }
+        }
+        std::cerr << "❌ Impossible de binder un port. Vérifiez qu'aucun autre processus n'occupe 50051." << std::endl;
+        return; // éviter segfault
+    }
 
+    auto server = builder.BuildAndStart();
+    if (!server) {
+        std::cerr << "❌ BuildAndStart a retourné nullptr (échec interne gRPC)." << std::endl;
+        return;
+    }
+    std::cout << "✅ Serveur lancé avec succès sur " << serverAddress << std::endl;
     server->Wait();
 }
 
