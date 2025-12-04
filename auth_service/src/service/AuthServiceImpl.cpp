@@ -39,9 +39,10 @@ Status AuthServiceImpl::RegisterUser(ServerContext* context,
         // Hash mot de passe
     std::string hashedPassword = PasswordHasher::hashPassword(password);
 
-        // Enregistre utilisateur
+        // Enregistre utilisateur avec rôle par défaut
+        std::string roleName = !request->role_name().empty() ? request->role_name() : "user";
         try {
-            database_->registerUser(fullName, email, hashedPassword);
+            database_->registerUserWithRole(fullName, email, hashedPassword, roleName);
         } catch (const pqxx::sql_error& se) {
             std::cerr << "[AuthService] RegisterUser SQL error: " << se.what() << std::endl;
             response->set_success(false);
@@ -138,4 +139,35 @@ Status AuthServiceImpl::ValidateToken(ServerContext* context,
         std::cerr << "[AuthService] ValidateToken exception: " << e.what() << std::endl;
         return Status(StatusCode::INTERNAL, e.what());
     }
+}
+
+// Méthodes RBAC - implémentations temporaires pour compilation
+Status AuthServiceImpl::RefreshToken(ServerContext* context,
+                                   const securecloud::auth::RefreshTokenRequest* request,
+                                   securecloud::auth::RefreshTokenResponse* response) {
+    return Status(StatusCode::UNIMPLEMENTED, "RefreshToken not implemented yet");
+}
+
+Status AuthServiceImpl::AssignRole(ServerContext* context,
+                                 const securecloud::auth::AssignRoleRequest* request,
+                                 securecloud::auth::AssignRoleResponse* response) {
+    return Status(StatusCode::UNIMPLEMENTED, "AssignRole not implemented yet");
+}
+
+Status AuthServiceImpl::CreateRole(ServerContext* context,
+                                 const securecloud::auth::CreateRoleRequest* request,
+                                 securecloud::auth::CreateRoleResponse* response) {
+    return Status(StatusCode::UNIMPLEMENTED, "CreateRole not implemented yet");
+}
+
+Status AuthServiceImpl::ListRoles(ServerContext* context,
+                                const securecloud::auth::ListRolesRequest* request,
+                                securecloud::auth::ListRolesResponse* response) {
+    return Status(StatusCode::UNIMPLEMENTED, "ListRoles not implemented yet");
+}
+
+Status AuthServiceImpl::GetUserPermissions(ServerContext* context,
+                                          const securecloud::auth::GetUserPermissionsRequest* request,
+                                          securecloud::auth::GetUserPermissionsResponse* response) {
+    return Status(StatusCode::UNIMPLEMENTED, "GetUserPermissions not implemented yet");
 }

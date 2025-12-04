@@ -57,6 +57,72 @@ void Database::registerUser(const std::string& fullName, const std::string& emai
     }
 }
 
+void Database::registerUserWithRole(const std::string& fullName, const std::string& email, const std::string& hashedPassword, const std::string& roleName) {
+    ensureConnection();
+    try {
+        pqxx::work txn(conn);
+        
+        // Récupérer l'ID du rôle
+        std::cout << "[Database] Recherche du rôle: " << roleName << std::endl;
+        pqxx::result role_r = txn.exec_params("SELECT id_roles FROM roles WHERE name = $1", roleName);
+        int role_id = 0;
+        if (!role_r.empty()) {
+            role_id = role_r[0]["id_roles"].as<int>();
+            std::cout << "[Database] Rôle trouvé, ID: " << role_id << std::endl;
+        } else {
+            std::cout << "[Database] ❌ Rôle '" << roleName << "' non trouvé !" << std::endl;
+            // Créer le rôle "user" s'il n'existe pas
+            if (roleName == "user") {
+                txn.exec_params("INSERT INTO roles (name, description) VALUES ('user', 'Utilisateur standard') ON CONFLICT (name) DO NOTHING");
+                pqxx::result retry_role_r = txn.exec_params("SELECT id_roles FROM roles WHERE name = $1", roleName);
+                if (!retry_role_r.empty()) {
+                    role_id = retry_role_r[0]["id_roles"].as<int>();
+                    std::cout << "[Database] Rôle 'user' créé avec ID: " << role_id << std::endl;
+                }
+            }
+        }
+        
+        // Insérer l'utilisateur avec le rôle
+        if (role_id > 0) {
+            txn.exec_params(
+                "INSERT INTO users (full_name, email, password_hash, role_id) VALUES ($1, $2, $3, $4)",
+                fullName, email, hashedPassword, role_id
+            );
+            std::cout << "[Database] Utilisateur inséré avec role_id: " << role_id << std::endl;
+        } else {
+            txn.exec_params(
+                "INSERT INTO users (full_name, email, password_hash) VALUES ($1, $2, $3)",
+                fullName, email, hashedPassword
+            );
+            std::cout << "[Database] Utilisateur inséré SANS rôle (role_id=NULL)" << std::endl;
+        }
+        txn.commit();
+    } catch (const pqxx::broken_connection& bc) {
+        std::cerr << "[Database] broken_connection in registerUserWithRole: " << bc.what() << std::endl;
+        ensureConnection();
+        // Retry logic similar to above
+        pqxx::work retryTxn(conn);
+        pqxx::result role_r = retryTxn.exec_params("SELECT id_roles FROM roles WHERE name = $1", roleName);
+        int role_id = 0;
+        if (!role_r.empty()) {
+            role_id = role_r[0]["id_roles"].as<int>();
+        }
+        
+        if (role_id > 0) {
+            retryTxn.exec_params(
+                "INSERT INTO users (full_name, email, password_hash, role_id) VALUES ($1, $2, $3, $4)",
+                fullName, email, hashedPassword, role_id
+            );
+        } else {
+            retryTxn.exec_params(
+                "INSERT INTO users (full_name, email, password_hash) VALUES ($1, $2, $3)",
+                fullName, email, hashedPassword
+            );
+        }
+        retryTxn.commit();
+    }
+}
+
 std::optional<UserRecord> Database::getUserByEmail(const std::string& email) {
     ensureConnection();
     try {

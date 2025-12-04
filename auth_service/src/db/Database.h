@@ -31,6 +31,7 @@ public:
     explicit Database(const std::string& connStr);
     bool userExists(const std::string& email);
     void registerUser(const std::string& fullName, const std::string& email, const std::string& hashedPassword);
+    void registerUserWithRole(const std::string& fullName, const std::string& email, const std::string& hashedPassword, const std::string& roleName);
     std::optional<UserRecord> getUserByEmail(const std::string& email);
     
     // RBAC methods
