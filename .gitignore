@@ -48,6 +48,22 @@ yarn-error.log*
 rad.json
 
 #Translation Base-file
+
+# --- Python ---
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+pip-log.txt
+pip-delete-this-directory.txt
+
+# --- Tests ---
+.pytest_cache/
+.coverage
+htmlcov/
 *.g.xlf
 
 #License-file
