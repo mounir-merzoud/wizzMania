@@ -3,7 +3,10 @@
 #include <QWidget>
 #include <QLabel>
 #include <QHBoxLayout>
+#include <QVBoxLayout>
 #include <QMouseEvent>
+#include <QPainter>
+#include <QPaintEvent>
 #include "../models/Contact.h"
 #include "../utils/StyleHelper.h"
 
@@ -14,52 +17,58 @@ public:
     explicit ContactRow(const Contact& contact, QWidget* parent = nullptr)
         : QWidget(parent), m_contact(contact)
     {
-        setFixedHeight(64);
+        setFixedHeight(72);
         setCursor(Qt::PointingHandCursor);
         
         QHBoxLayout* layout = new QHBoxLayout(this);
-        layout->setContentsMargins(16, 8, 16, 8);
+        layout->setContentsMargins(16, 12, 16, 12);
         layout->setSpacing(12);
         
-        // Avatar circle
+        // Avatar circulaire avec initiales
         QLabel* avatar = new QLabel(this);
         avatar->setFixedSize(48, 48);
+        
+        // Couleur avatar basée sur le nom
+        QString avatarColor = getAvatarColor(contact.name());
+        QString initials = getInitials(contact.name());
+        
         avatar->setStyleSheet(
-            "background:" + StyleHelper::primaryBlue() + ";"
-            "border-radius:24px;"
-            "color:white;"
-            "font-size:18px;"
-            "font-weight:600;"
+            "QLabel {"
+            "  background:" + avatarColor + ";"
+            "  border-radius:24px;"
+            "  color:white;"
+            "  font-size:16px;"
+            "  font-weight:600;"
+            "}"
         );
         avatar->setAlignment(Qt::AlignCenter);
-        avatar->setText(contact.name().left(1).toUpper());
+        avatar->setText(initials);
         
         // Name and status
         QWidget* textContainer = new QWidget(this);
         QVBoxLayout* textLayout = new QVBoxLayout(textContainer);
         textLayout->setContentsMargins(0, 0, 0, 0);
-        textLayout->setSpacing(2);
+        textLayout->setSpacing(4);
         
         m_nameLabel = new QLabel(contact.name(), textContainer);
-        m_nameLabel->setStyleSheet("font-size:16px;font-weight:600;color:#0b1120;");
+        m_nameLabel->setStyleSheet("font-size:15px;font-weight:500;color:" + StyleHelper::textDark() + ";");
         
         m_statusLabel = new QLabel(contact.status(), textContainer);
-        m_statusLabel->setStyleSheet("font-size:13px;color:#6b7280;");
+        m_statusLabel->setStyleSheet("font-size:13px;color:" + StyleHelper::textGray() + ";");
         
         textLayout->addWidget(m_nameLabel);
         textLayout->addWidget(m_statusLabel);
-        textLayout->addStretch();
         
         layout->addWidget(avatar);
         layout->addWidget(textContainer, 1);
         
         setStyleSheet(
             "ContactRow {"
-            "  background:white;"
-            "  border-radius:12px;"
+            "  background:" + StyleHelper::white() + ";"
+            "  border-bottom:1px solid " + StyleHelper::borderGray() + ";"
             "}"
             "ContactRow:hover {"
-            "  background:#f3f4f6;"
+            "  background:" + StyleHelper::lightGray() + ";"
             "}"
         );
     }
@@ -78,6 +87,38 @@ protected:
     }
     
 private:
+    QString getInitials(const QString& name) {
+        QStringList parts = name.split(' ');
+        if (parts.isEmpty()) return "?";
+        
+        QString initials;
+        if (parts.size() == 1) {
+            initials = parts[0].left(2).toUpper();
+        } else {
+            initials = parts[0].left(1).toUpper() + parts[1].left(1).toUpper();
+        }
+        return initials;
+    }
+    
+    QString getAvatarColor(const QString& name) {
+        // Palette de couleurs MSF-friendly
+        QStringList colors = {
+            "#0066CC", // Blue primary
+            "#0052A3", // Darker blue
+            "#2E86DE", // Sky blue
+            "#00A8CC", // Cyan
+            "#16A085", // Teal
+            "#27AE60"  // Green
+        };
+        
+        int hash = 0;
+        for (QChar c : name) {
+            hash += c.unicode();
+        }
+        
+        return colors[hash % colors.size()];
+    }
+    
     Contact m_contact;
     QLabel* m_nameLabel;
     QLabel* m_statusLabel;

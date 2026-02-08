@@ -18,33 +18,32 @@ class MainWindow : public QMainWindow {
     
 public:
     explicit MainWindow(QWidget* parent = nullptr) : QMainWindow(parent) {
-        setWindowTitle("WizzMania");
-        setMinimumSize(1200, 800);
+        setWindowTitle("MSF Messenger");
+        setMinimumSize(1100, 700);
         
         // Central widget
         QWidget* central = new QWidget(this);
         setCentralWidget(central);
+        central->setStyleSheet("background:" + StyleHelper::lightGray() + ";");
         
         QHBoxLayout* mainLayout = new QHBoxLayout(central);
         mainLayout->setContentsMargins(0, 0, 0, 0);
         mainLayout->setSpacing(0);
         
-        // Sidebar
+        // Sidebar style WhatsApp
         QWidget* sidebar = createSidebar();
-        sidebar->setFixedWidth(80);
+        sidebar->setFixedWidth(70);
         
-        // Content area with stacked pages
+        // Content area
         m_stackedWidget = new QStackedWidget(this);
-        m_stackedWidget->setStyleSheet("background:" + StyleHelper::blueBg() + ";");
+        m_stackedWidget->setStyleSheet("background:" + StyleHelper::white() + ";");
         
         // Add pages
-        m_mapPage = new MapPage(m_stackedWidget);
         m_contactsPage = new ContactsPage(m_stackedWidget);
         m_conversationPage = new ConversationPage(m_stackedWidget);
         
-        m_stackedWidget->addWidget(m_mapPage);       // index 0
-        m_stackedWidget->addWidget(m_contactsPage);  // index 1
-        m_stackedWidget->addWidget(m_conversationPage); // index 2
+        m_stackedWidget->addWidget(m_contactsPage);      // index 0
+        m_stackedWidget->addWidget(m_conversationPage);  // index 1
         
         // Connect contact selection
         connect(m_contactsPage, &ContactsPage::contactClicked, 
@@ -53,7 +52,7 @@ public:
         mainLayout->addWidget(sidebar);
         mainLayout->addWidget(m_stackedWidget, 1);
         
-        // Show map by default
+        // Show contacts by default
         m_stackedWidget->setCurrentIndex(0);
     }
     
@@ -61,80 +60,67 @@ private:
     QWidget* createSidebar() {
         QWidget* sidebar = new QWidget(this);
         sidebar->setStyleSheet(
-            "QWidget { background:rgba(255,255,255,0.92); }"
+            "QWidget { "
+            "  background:" + StyleHelper::white() + ";"
+            "  border-right:1px solid " + StyleHelper::borderGray() + ";"
+            "}"
         );
         
         QVBoxLayout* layout = new QVBoxLayout(sidebar);
-        layout->setContentsMargins(0, 20, 0, 20);
-        layout->setSpacing(12);
+        layout->setContentsMargins(0, 16, 0, 16);
+        layout->setSpacing(8);
         
-        // Logo
-        QLabel* logo = new QLabel("🧙‍♂️", sidebar);
+        // Logo MSF en haut
+        QLabel* logo = new QLabel("MSF", sidebar);
         logo->setAlignment(Qt::AlignCenter);
-        logo->setStyleSheet("font-size:32px;background:transparent;");
+        logo->setStyleSheet(
+            "font-size:18px;"
+            "font-weight:700;"
+            "color:" + StyleHelper::primaryBlue() + ";"
+            "padding:12px 0;"
+            "background:transparent;"
+        );
         
         layout->addWidget(logo);
-        layout->addSpacing(20);
+        layout->addSpacing(24);
         
-        // Navigation buttons
-        QPushButton* mapBtn = createNavButton("🗺️", "Map");
-        QPushButton* contactsBtn = createNavButton("👥", "Contacts");
-        QPushButton* chatsBtn = createNavButton("💬", "Chats");
-        QPushButton* filesBtn = createNavButton("📁", "Files");
+        // Navigation buttons - icônes simples (texte pour l'instant)
+        QPushButton* chatsBtn = createNavButton("💬");
+        QPushButton* settingsBtn = createNavButton("⚙️");
         
-        connect(mapBtn, &QPushButton::clicked, [this]() { 
+        connect(chatsBtn, &QPushButton::clicked, [this]() { 
             m_stackedWidget->setCurrentIndex(0); 
         });
-        connect(contactsBtn, &QPushButton::clicked, [this]() { 
-            m_stackedWidget->setCurrentIndex(1); 
-        });
-        connect(chatsBtn, &QPushButton::clicked, [this]() { 
-            m_stackedWidget->setCurrentIndex(2); 
-        });
         
-        layout->addWidget(mapBtn);
-        layout->addWidget(contactsBtn);
         layout->addWidget(chatsBtn);
-        layout->addWidget(filesBtn);
         layout->addStretch();
         
-        // Logout button at bottom
-        QPushButton* logoutBtn = createNavButton("🚪", "Logout");
-        logoutBtn->setStyleSheet(
-            "QPushButton {"
-            "  background:transparent;"
-            "  border:none;"
-            "  color:" + StyleHelper::redAlert() + ";"
-            "  font-size:24px;"
-            "  padding:12px;"
-            "}"
-            "QPushButton:hover {"
-            "  background:rgba(255,59,48,0.1);"
-            "  border-radius:12px;"
-            "}"
-        );
-        connect(logoutBtn, &QPushButton::clicked, this, &MainWindow::logoutRequested);
+        // Settings et logout en bas
+        layout->addWidget(settingsBtn);
         
+        QPushButton* logoutBtn = createNavButton("🚪");
+        connect(logoutBtn, &QPushButton::clicked, this, &MainWindow::logoutRequested);
         layout->addWidget(logoutBtn);
         
         return sidebar;
     }
     
-    QPushButton* createNavButton(const QString& emoji, const QString& tooltip) {
-        QPushButton* btn = new QPushButton(emoji, this);
-        btn->setToolTip(tooltip);
-        btn->setFixedSize(56, 56);
+    QPushButton* createNavButton(const QString& icon) {
+        QPushButton* btn = new QPushButton(icon, this);
+        btn->setFixedSize(54, 54);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setStyleSheet(
             "QPushButton {"
             "  background:transparent;"
             "  border:none;"
             "  font-size:24px;"
-            "  padding:8px;"
+            "  border-radius:12px;"
             "}"
             "QPushButton:hover {"
-            "  background:rgba(0,122,255,0.1);"
-            "  border-radius:12px;"
+            "  background:" + StyleHelper::lightBlue() + ";"
+            "}"
+            "QPushButton:pressed {"
+            "  background:" + StyleHelper::borderGray() + ";"
             "}"
         );
         return btn;
@@ -142,7 +128,7 @@ private:
     
     void onContactSelected(const Contact& contact) {
         m_conversationPage->setContact(contact);
-        m_stackedWidget->setCurrentIndex(2);
+        m_stackedWidget->setCurrentIndex(1);
     }
     
 signals:
@@ -150,7 +136,6 @@ signals:
     
 private:
     QStackedWidget* m_stackedWidget;
-    MapPage* m_mapPage;
     ContactsPage* m_contactsPage;
     ConversationPage* m_conversationPage;
 };

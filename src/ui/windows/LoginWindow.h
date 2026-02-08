@@ -14,72 +14,83 @@ class LoginWindow : public QWidget {
     
 public:
     explicit LoginWindow(QWidget* parent = nullptr) : QWidget(parent) {
-        setWindowTitle("WizzMania - Login");
-        setFixedSize(500, 650);
+        setWindowTitle("MSF Messenger - Login");
+        setFixedSize(450, 600);
         
-        setStyleSheet("QWidget { background:" + StyleHelper::blueBg() + "; }");
+        setStyleSheet("QWidget { background:" + StyleHelper::white() + "; }");
         
         QVBoxLayout* mainLayout = new QVBoxLayout(this);
-        mainLayout->setContentsMargins(50, 80, 50, 80);
-        mainLayout->setSpacing(24);
+        mainLayout->setContentsMargins(40, 60, 40, 60);
+        mainLayout->setSpacing(32);
         
-        // Logo & Title
-        // QLabel* logo = new QLabel("🧙‍♂️", this);
-        // logo->setAlignment(Qt::AlignCenter);
-        // logo->setStyleSheet("font-size:64px;");
-        
-        QLabel* title = new QLabel("WizzMania", this);
-        title->setAlignment(Qt::AlignCenter);
-        title->setStyleSheet(
-            "font-size:32px;"
+        // Logo MSF (texte simple et épuré)
+        QLabel* logo = new QLabel("MSF", this);
+        logo->setAlignment(Qt::AlignCenter);
+        logo->setStyleSheet(
+            "font-size:48px;"
             "font-weight:700;"
-            "color:" + StyleHelper::darkText() + ";"
+            "color:" + StyleHelper::primaryBlue() + ";"
+            "letter-spacing:4px;"
         );
         
-        QLabel* subtitle = new QLabel("Sign in to continue", this);
+        QLabel* subtitle = new QLabel("Médecins Sans Frontières", this);
         subtitle->setAlignment(Qt::AlignCenter);
-        subtitle->setStyleSheet("font-size:15px;color:#6b7280;");
+        subtitle->setStyleSheet(StyleHelper::secondaryTextStyle());
+        
+        QLabel* appName = new QLabel("Secure Messenger", this);
+        appName->setAlignment(Qt::AlignCenter);
+        appName->setStyleSheet(
+            "font-size:20px;"
+            "font-weight:600;"
+            "color:" + StyleHelper::textDark() + ";"
+            "margin-top:8px;"
+        );
         
         mainLayout->addWidget(logo);
-        mainLayout->addWidget(title);
         mainLayout->addWidget(subtitle);
-        mainLayout->addSpacing(20);
+        mainLayout->addWidget(appName);
+        mainLayout->addSpacing(32);
         
-        // Login form
-        QWidget* formCard = new QWidget(this);
-        formCard->setStyleSheet(StyleHelper::cardStyle());
-        QVBoxLayout* formLayout = new QVBoxLayout(formCard);
-        formLayout->setSpacing(16);
-        
-        m_usernameInput = new QLineEdit(formCard);
-        m_usernameInput->setPlaceholderText("Username");
+        // Login form - très épuré
+        m_usernameInput = new QLineEdit(this);
+        m_usernameInput->setPlaceholderText("Email or username");
         m_usernameInput->setStyleSheet(StyleHelper::inputStyle());
         
-        m_passwordInput = new QLineEdit(formCard);
+        m_passwordInput = new QLineEdit(this);
         m_passwordInput->setPlaceholderText("Password");
         m_passwordInput->setEchoMode(QLineEdit::Password);
         m_passwordInput->setStyleSheet(StyleHelper::inputStyle());
         
-        QPushButton* loginBtn = new QPushButton("Login", formCard);
-        loginBtn->setStyleSheet(StyleHelper::buttonStyle());
+        QPushButton* loginBtn = new QPushButton("Sign In", this);
+        loginBtn->setStyleSheet(StyleHelper::primaryButton());
+        loginBtn->setMinimumHeight(48);
         loginBtn->setCursor(Qt::PointingHandCursor);
         
         connect(loginBtn, &QPushButton::clicked, this, &LoginWindow::onLoginClicked);
         
         // Error label
-        m_errorLabel = new QLabel(formCard);
-        m_errorLabel->setStyleSheet("color:" + StyleHelper::redAlert() + ";font-size:14px;");
+        m_errorLabel = new QLabel(this);
+        m_errorLabel->setStyleSheet("color:#DC3545;font-size:14px;");
         m_errorLabel->setAlignment(Qt::AlignCenter);
         m_errorLabel->setWordWrap(true);
         m_errorLabel->hide();
         
-        formLayout->addWidget(m_usernameInput);
-        formLayout->addWidget(m_passwordInput);
-        formLayout->addWidget(m_errorLabel);
-        formLayout->addWidget(loginBtn);
-        
-        mainLayout->addWidget(formCard);
+        mainLayout->addWidget(m_usernameInput);
+        mainLayout->addWidget(m_passwordInput);
+        mainLayout->addWidget(m_errorLabel);
+        mainLayout->addWidget(loginBtn);
         mainLayout->addStretch();
+        
+        // Footer discret
+        QLabel* footer = new QLabel("Secure communication for humanitarian field workers", this);
+        footer->setAlignment(Qt::AlignCenter);
+        footer->setStyleSheet(
+            "font-size:12px;"
+            "color:" + StyleHelper::textGray() + ";"
+        );
+        footer->setWordWrap(true);
+        
+        mainLayout->addWidget(footer);
     }
     
 signals:
@@ -93,17 +104,16 @@ private slots:
         m_errorLabel->hide();
         
         if (username.isEmpty() || password.isEmpty()) {
-            m_errorLabel->setText("Please fill in all fields");
+            m_errorLabel->setText("Veuillez remplir tous les champs");
             m_errorLabel->show();
             return;
         }
         
         // TODO: Connect to AuthService
-        // For now, accept any non-empty credentials
         if (username == "demo" && password == "demo") {
             emit loginSuccessful(username);
         } else {
-            m_errorLabel->setText("Invalid credentials. Try demo/demo");
+            m_errorLabel->setText("Identifiants invalides. Essayez demo/demo");
             m_errorLabel->show();
         }
     }
