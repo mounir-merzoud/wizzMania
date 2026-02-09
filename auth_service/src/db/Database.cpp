@@ -164,6 +164,34 @@ std::optional<UserRecord> Database::getUserByEmail(const std::string& email) {
     }
 }
 
+std::vector<UserRecord> Database::listUsers() {
+    ensureConnection();
+    std::vector<UserRecord> users;
+    try {
+        pqxx::work txn(conn);
+        pqxx::result r = txn.exec(
+            "SELECT u.id_users, u.email, u.password_hash, u.full_name, u.role_id, r.name as role_name "
+            "FROM users u LEFT JOIN roles r ON u.role_id = r.id_roles "
+            "ORDER BY u.full_name, u.email"
+        );
+
+        users.reserve(r.size());
+        for (const auto& row : r) {
+            users.push_back(UserRecord{
+                row["id_users"].as<int>(),
+                row["email"].as<std::string>(),
+                row["password_hash"].as<std::string>(),
+                row["full_name"].as<std::string>(),
+                row["role_id"].is_null() ? 0 : row["role_id"].as<int>(),
+                row["role_name"].is_null() ? "" : row["role_name"].as<std::string>()
+            });
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "[Database] Error listing users: " << e.what() << std::endl;
+    }
+    return users;
+}
+
 // RBAC Methods Implementation
 std::vector<std::string> Database::getUserPermissions(int user_id) {
     ensureConnection();

@@ -27,7 +27,7 @@ public:
         bubble->setMaximumWidth(400);
         bubble->setTextInteractionFlags(Qt::TextSelectableByMouse);
         
-        QLabel* timestamp = new QLabel("12:34", this);
+        QLabel* timestamp = new QLabel(message.timestamp().toString("HH:mm"), this);
         timestamp->setStyleSheet("font-size:11px;color:" + StyleHelper::textGray() + ";");
         
         if (message.type() == Message::Type::Sent) {

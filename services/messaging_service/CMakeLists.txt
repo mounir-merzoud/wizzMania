@@ -3,49 +3,14 @@ project(messaging_service LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0")
 
-find_package(Protobuf CONFIG QUIET)
-if(NOT Protobuf_FOUND)
-  find_package(Protobuf REQUIRED)
-endif()
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-find_package(gRPC CONFIG QUIET)
-if(NOT gRPC_FOUND)
-  find_package(gRPC REQUIRED)
-endif()
-
-if(TARGET protobuf::libprotobuf)
-  set(_PROTOBUF_LIB protobuf::libprotobuf)
-else()
-  set(_PROTOBUF_LIB ${Protobuf_LIBRARIES})
-endif()
-
-if(TARGET gRPC::grpc++)
-  set(_GRPC_GRPCPP_LIB gRPC::grpc++)
-else()
-  set(_GRPC_GRPCPP_LIB ${gRPC_LIBRARIES})
-endif()
-
-if(TARGET protobuf::protoc)
-  set(_PROTOBUF_PROTOC $<TARGET_FILE:protobuf::protoc>)
-elseif(DEFINED Protobuf_PROTOC_EXECUTABLE)
-  set(_PROTOBUF_PROTOC ${Protobuf_PROTOC_EXECUTABLE})
-else()
-  find_program(_PROTOBUF_PROTOC protoc)
-  if(NOT _PROTOBUF_PROTOC)
-    message(FATAL_ERROR "protoc executable not found. Install protobuf compiler.")
-  endif()
-endif()
-
-if(TARGET gRPC::grpc_cpp_plugin)
-  set(_GRPC_CPP_PLUGIN $<TARGET_FILE:gRPC::grpc_cpp_plugin>)
-else()
-  find_program(_GRPC_CPP_PLUGIN grpc_cpp_plugin)
-  if(NOT _GRPC_CPP_PLUGIN)
-    message(FATAL_ERROR "grpc_cpp_plugin executable not found. Install gRPC C++ plugin.")
-  endif()
-endif()
+# Dépendances (via vcpkg: -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake)
+find_package(Protobuf CONFIG REQUIRED)
+find_package(gRPC CONFIG REQUIRED)
+find_package(libpqxx CONFIG REQUIRED)
+find_package(Threads REQUIRED)
 
 set(PROTO_FILE ${CMAKE_CURRENT_SOURCE_DIR}/proto/messaging.proto)
 set(GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
@@ -58,11 +23,11 @@ set(GRPC_HDRS ${GEN_DIR}/messaging.grpc.pb.h)
 
 add_custom_command(
   OUTPUT ${PROTO_SRCS} ${PROTO_HDRS} ${GRPC_SRCS} ${GRPC_HDRS}
-  COMMAND ${_PROTOBUF_PROTOC}
+  COMMAND protobuf::protoc
   ARGS --proto_path=${CMAKE_CURRENT_SOURCE_DIR}/proto
        --cpp_out=${GEN_DIR}
        --grpc_out=${GEN_DIR}
-    --plugin=protoc-gen-grpc=${_GRPC_CPP_PLUGIN}
+    --plugin=protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin>
        ${PROTO_FILE}
   DEPENDS ${PROTO_FILE}
   VERBATIM
@@ -70,6 +35,9 @@ add_custom_command(
 
 add_executable(messaging_service
   src/messaging_service.cpp
+  src/db/Database.cpp
+  src/utils/Base64.cpp
+  src/utils/EnvLoader.cpp
   ${PROTO_SRCS}
   ${GRPC_SRCS}
 )
@@ -83,29 +51,24 @@ add_executable(test_client
 set(_COMMON_INCLUDES
   ${GEN_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/db
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/utils
 )
-
-if(Protobuf_INCLUDE_DIRS)
-  list(APPEND _COMMON_INCLUDES ${Protobuf_INCLUDE_DIRS})
-endif()
-
-if(gRPC_INCLUDE_DIRS)
-  list(APPEND _COMMON_INCLUDES ${gRPC_INCLUDE_DIRS})
-endif()
 
 target_include_directories(messaging_service PRIVATE ${_COMMON_INCLUDES})
 target_include_directories(test_client PRIVATE ${_COMMON_INCLUDES})
 
 target_link_libraries(messaging_service
   PRIVATE
-    ${_GRPC_GRPCPP_LIB}
-    ${_PROTOBUF_LIB}
-  pthread
+    gRPC::grpc++
+    protobuf::libprotobuf
+    libpqxx::pqxx
+    Threads::Threads
 )
 
 target_link_libraries(test_client
   PRIVATE
-    ${_GRPC_GRPCPP_LIB}
-    ${_PROTOBUF_LIB}
-  pthread
+    gRPC::grpc++
+    protobuf::libprotobuf
+    Threads::Threads
 )

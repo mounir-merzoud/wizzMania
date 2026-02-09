@@ -74,6 +74,12 @@ public:
     }
     
     Contact contact() const { return m_contact; }
+
+    void setContact(const Contact& contact) {
+        m_contact = contact;
+        m_nameLabel->setText(contact.name());
+        m_statusLabel->setText(contact.status());
+    }
     
 signals:
     void clicked(const Contact& contact);
