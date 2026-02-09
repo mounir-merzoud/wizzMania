@@ -15,9 +15,23 @@ Status AuthServiceImpl::RegisterUser(ServerContext* context,
                                      const securecloud::auth::RegisterRequest* request,
                                      securecloud::auth::RegisterResponse* response) {
     try {
+    (void)context;
         std::string fullName = request->full_name();
         std::string email = request->email();
         std::string password = request->password();
+
+        // Admin-only: require a valid admin token.
+        if (!request->admin_token().empty()) {
+            if (!validateAdminToken(request->admin_token())) {
+                response->set_success(false);
+                response->set_message("Accès refusé (admin requis).");
+                return Status(StatusCode::PERMISSION_DENIED, "Admin token required");
+            }
+        } else {
+            response->set_success(false);
+            response->set_message("Token admin manquant.");
+            return Status(StatusCode::PERMISSION_DENIED, "Missing admin token");
+        }
 
         std::cout << "[AuthService] RegisterUser: email=" << email << std::endl;
 
@@ -37,7 +51,7 @@ Status AuthServiceImpl::RegisterUser(ServerContext* context,
         }
 
         // Hash mot de passe
-    std::string hashedPassword = PasswordHasher::hashPassword(password);
+        std::string hashedPassword = PasswordHasher::hashPassword(password);
 
         // Enregistre utilisateur avec rôle par défaut
         std::string roleName = !request->role_name().empty() ? request->role_name() : "user";
@@ -72,6 +86,7 @@ Status AuthServiceImpl::Login(ServerContext* context,
                               const securecloud::auth::LoginRequest* request,
                               securecloud::auth::LoginResponse* response) {
     try {
+    (void)context;
         // Dans ce service, on considère que username == email
         std::string email = request->username();
         std::string password = request->password();
@@ -128,17 +143,61 @@ Status AuthServiceImpl::ValidateToken(ServerContext* context,
                                       const securecloud::auth::ValidateTokenRequest* request,
                                       securecloud::auth::ValidateTokenResponse* response) {
     try {
+    (void)context;
         const std::string token = request->access_token();
         std::cout << "[AuthService] ValidateToken: verifying" << std::endl;
-        bool ok = authManager_->verifyToken(token);
-        response->set_valid(ok);
-        // Optionnel: user_id/permissions non renseignés ici
-        std::cout << "[AuthService] ValidateToken: valid=" << (ok ? "true" : "false") << std::endl;
+        const auto info = authManager_->decodeToken(token);
+        response->set_valid(info.valid);
+        if (info.valid) {
+            response->set_user_id(info.userId);
+            response->set_email(info.email);
+            response->set_role(info.role);
+            for (const auto& perm : info.permissions) {
+                response->add_permissions(perm);
+            }
+        }
+        std::cout << "[AuthService] ValidateToken: valid=" << (info.valid ? "true" : "false") << std::endl;
         return Status::OK;
     } catch (const std::exception& e) {
         std::cerr << "[AuthService] ValidateToken exception: " << e.what() << std::endl;
         return Status(StatusCode::INTERNAL, e.what());
     }
+}
+
+// ----------------------------
+// Users directory
+// ----------------------------
+Status AuthServiceImpl::ListUsers(ServerContext*,
+                                 const securecloud::auth::ListUsersRequest* request,
+                                 securecloud::auth::ListUsersResponse* response) {
+    try {
+        const std::string token = request->access_token();
+        const auto info = authManager_->decodeToken(token);
+        if (!info.valid) {
+            return Status(StatusCode::UNAUTHENTICATED, "Invalid token");
+        }
+
+        const auto users = database_->listUsers();
+        for (const auto& u : users) {
+            if (!request->include_self() && std::to_string(u.id) == info.userId) {
+                continue;
+            }
+            auto* out = response->add_users();
+            out->set_user_id(std::to_string(u.id));
+            out->set_full_name(u.full_name);
+            out->set_email(u.email);
+            out->set_role(u.role_name);
+        }
+        return Status::OK;
+    } catch (const std::exception& e) {
+        std::cerr << "[AuthService] ListUsers exception: " << e.what() << std::endl;
+        return Status(StatusCode::INTERNAL, e.what());
+    }
+}
+
+bool AuthServiceImpl::validateAdminToken(const std::string& token) {
+    const auto info = authManager_->decodeToken(token);
+    return info.valid && info.role == "admin";
 }
 
 // Méthodes RBAC - implémentations temporaires pour compilation

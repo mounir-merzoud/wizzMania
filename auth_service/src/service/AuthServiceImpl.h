@@ -30,6 +30,10 @@ public:
                         const securecloud::auth::ValidateTokenRequest* request,
                         securecloud::auth::ValidateTokenResponse* response) override;
 
+        Status ListUsers(ServerContext* context,
+                        const securecloud::auth::ListUsersRequest* request,
+                        securecloud::auth::ListUsersResponse* response) override;
+
     Status RefreshToken(ServerContext* context,
                        const securecloud::auth::RefreshTokenRequest* request,
                        securecloud::auth::RefreshTokenResponse* response) override;

@@ -2,6 +2,7 @@
 #include <pqxx/pqxx>
 #include <optional>
 #include <string>
+#include <vector>
 
 struct UserRecord {
     int id;                 // maps to users.id_users
@@ -33,6 +34,8 @@ public:
     void registerUser(const std::string& fullName, const std::string& email, const std::string& hashedPassword);
     void registerUserWithRole(const std::string& fullName, const std::string& email, const std::string& hashedPassword, const std::string& roleName);
     std::optional<UserRecord> getUserByEmail(const std::string& email);
+
+    std::vector<UserRecord> listUsers();
     
     // RBAC methods
     std::vector<std::string> getUserPermissions(int user_id);

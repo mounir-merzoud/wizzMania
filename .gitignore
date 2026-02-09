@@ -21,6 +21,9 @@ Makefile
 *.so
 *.dylib
 *.obj
+*.pdb
+*.ilk
+*.idb
 
 # --- Logs ---
 *.log
@@ -30,6 +33,19 @@ yarn-error.log*
 
 # --- VS Code ---
 .vscode/
+*.code-workspace
+
+# --- Visual Studio / MSBuild (generated) ---
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.tlog
+*.lastbuildstate
+*.recipe
+*.VC.db
+*.VC.opendb
 
 #Cache folder
 .alcache/
@@ -144,3 +160,9 @@ files_storage/
 .env.local
 .env.development
 .env.production
+
+# --- Local service build dirs ---
+services/messaging_service/build-win/
+
+# Accidental file created during debugging on Windows
+services/messaging_service/nul

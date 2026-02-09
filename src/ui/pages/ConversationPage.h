@@ -7,6 +7,7 @@
 #include <QScrollArea>
 #include <QLineEdit>
 #include <QPushButton>
+#include "../../services/MessagingService.h"
 #include "../components/MessageBubble.h"
 #include "../models/Contact.h"
 #include "../models/Message.h"
@@ -52,6 +53,12 @@ public:
         headerLayout->addStretch();
         
         root->addWidget(header);
+
+        m_errorLabel = new QLabel(this);
+        m_errorLabel->setStyleSheet("color:#DC3545;font-size:13px;padding:8px 16px;background:" + StyleHelper::white() + ";border-bottom:1px solid " + StyleHelper::borderGray() + ";");
+        m_errorLabel->setWordWrap(true);
+        m_errorLabel->hide();
+        root->addWidget(m_errorLabel);
         
         // Messages area avec fond WhatsApp
         QScrollArea* scrollArea = new QScrollArea(this);
@@ -63,11 +70,6 @@ public:
         m_messagesLayout = new QVBoxLayout(scrollContent);
         m_messagesLayout->setSpacing(8);
         m_messagesLayout->setContentsMargins(24, 16, 24, 16);
-        
-        // Messages démo
-        addMessage(Message("Bonjour, comment puis-je vous aider ?", Message::Type::Received));
-        addMessage(Message("J'ai besoin d'informations sur la mission", Message::Type::Sent));
-        addMessage(Message("Bien sûr, je vous envoie les documents", Message::Type::Received));
         
         m_messagesLayout->addStretch();
         scrollArea->setWidget(scrollContent);
@@ -84,9 +86,9 @@ public:
         inputLayout->setContentsMargins(16, 8, 16, 8);
         inputLayout->setSpacing(8);
         
-        QLineEdit* messageInput = new QLineEdit(inputBar);
-        messageInput->setPlaceholderText("Écrire un message...");
-        messageInput->setStyleSheet(
+        m_messageInput = new QLineEdit(inputBar);
+        m_messageInput->setPlaceholderText("Écrire un message...");
+        m_messageInput->setStyleSheet(
             "QLineEdit {"
             "  background:" + StyleHelper::lightGray() + ";"
             "  border:none;"
@@ -96,10 +98,10 @@ public:
             "}"
         );
         
-        QPushButton* sendBtn = new QPushButton("➤", inputBar);
-        sendBtn->setFixedSize(44, 44);
-        sendBtn->setCursor(Qt::PointingHandCursor);
-        sendBtn->setStyleSheet(
+        m_sendBtn = new QPushButton("➤", inputBar);
+        m_sendBtn->setFixedSize(44, 44);
+        m_sendBtn->setCursor(Qt::PointingHandCursor);
+        m_sendBtn->setStyleSheet(
             "QPushButton {"
             "  background:" + StyleHelper::primaryRed() + ";"
             "  color:white;"
@@ -114,22 +116,97 @@ public:
             "}"
         );
         
-        inputLayout->addWidget(messageInput, 1);
-        inputLayout->addWidget(sendBtn);
+        inputLayout->addWidget(m_messageInput, 1);
+        inputLayout->addWidget(m_sendBtn);
         
         root->addWidget(inputBar);
+
+        connect(m_sendBtn, &QPushButton::clicked, this, &ConversationPage::onSendClicked);
+        connect(m_messageInput, &QLineEdit::returnPressed, this, &ConversationPage::onSendClicked);
+        connect(&MessagingService::instance(), &MessagingService::messageReceived,
+                this, &ConversationPage::onMessageReceived);
+        connect(&MessagingService::instance(), &MessagingService::messagesUpdated,
+                this, [this](const QString& conversationId) {
+                    if (!m_currentContact.id().isEmpty() && m_currentContact.id() == conversationId) {
+                        reloadMessages();
+                    }
+                });
+        connect(&MessagingService::instance(), &MessagingService::errorOccurred,
+                this, [this](const QString& err) {
+                    if (!m_errorLabel) return;
+                    m_errorLabel->setText(err);
+                    m_errorLabel->show();
+                });
     }
     
     void setContact(const Contact& contact) {
+        m_currentContact = contact;
         m_headerName->setText(contact.name());
+        if (m_errorLabel) m_errorLabel->hide();
+        reloadMessages();
+        MessagingService::instance().refreshMessages(contact.id());
     }
     
 private:
+    void reloadMessages() {
+        clearMessages();
+
+        if (m_currentContact.id().isEmpty()) {
+            return;
+        }
+
+        const auto messages = MessagingService::instance().getMessages(m_currentContact.id());
+        for (const auto& msg : messages) {
+            addMessage(msg);
+        }
+    }
+
+    void clearMessages() {
+        // Remove old bubbles (keep the final stretch item)
+        while (m_messagesLayout->count() > 1) {
+            QLayoutItem* item = m_messagesLayout->takeAt(0);
+            if (!item) {
+                break;
+            }
+            if (auto* w = item->widget()) {
+                w->deleteLater();
+            }
+            delete item;
+        }
+    }
+
     void addMessage(const Message& message) {
         MessageBubble* bubble = new MessageBubble(message, this);
         m_messagesLayout->insertWidget(m_messagesLayout->count() - 1, bubble);
     }
+
+    void onSendClicked() {
+        if (m_currentContact.id().isEmpty()) {
+            return;
+        }
+
+        const QString content = m_messageInput->text().trimmed();
+        if (content.isEmpty()) {
+            return;
+        }
+
+        MessagingService::instance().sendMessage(m_currentContact.id(), content);
+        addMessage(Message(content, Message::Type::Sent));
+        m_messageInput->clear();
+    }
+
+    void onMessageReceived(const QString& contactId, const Message& message) {
+        if (m_currentContact.id() != contactId) {
+            return;
+        }
+        addMessage(message);
+    }
     
     QLabel* m_headerName;
     QVBoxLayout* m_messagesLayout;
+    QLabel* m_errorLabel = nullptr;
+
+    Contact m_currentContact;
+    QLineEdit* m_messageInput = nullptr;
+    QPushButton* m_sendBtn = nullptr;
 };

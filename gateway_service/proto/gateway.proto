@@ -16,3 +16,54 @@ message LoginResponse {
   string refresh_token = 2;
   int64 expires_in = 3;
 }
+
+// --- HTTP helper messages (used for JSON over HTTP in gateway_service) ---
+
+message ConversationSummary {
+  string conversation_id = 1;
+  string last_message = 2;
+  int64 last_timestamp_unix = 3;
+}
+
+message ListConversationsResponse {
+  repeated ConversationSummary conversations = 1;
+}
+
+message HttpMessage {
+  string message_id = 1;
+  string conversation_id = 2;
+  string sender_id = 3;
+  string content = 4;
+  int64 timestamp_unix = 5;
+}
+
+message ListMessagesResponse {
+  repeated HttpMessage messages = 1;
+}
+
+message SendMessageHttpRequest {
+  string content = 1;
+}
+
+message SendMessageHttpResponse {
+  string message_id = 1;
+  bool accepted = 2;
+}
+
+message HttpUser {
+  string user_id = 1;
+  string full_name = 2;
+  string email = 3;
+  string role = 4;
+}
+
+message ListUsersHttpResponse {
+  repeated HttpUser users = 1;
+}
+
+message RegisterHttpRequest {
+  string full_name = 1;
+  string email = 2;
+  string password = 3;
+  string role_name = 4;
+}
