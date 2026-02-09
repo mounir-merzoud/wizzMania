@@ -26,6 +26,10 @@ JsonPrintOptions compact_json_opts() {
     return opts;
 }
 
+std::string json_error(const std::string& message) {
+    return std::string("{\"success\":false,\"message\":\"") + message + "\"}";
+}
+
 void set_json(httplib::Response& res, int status, const std::string& body) {
     res.status = status;
     res.set_content(body, "application/json");
@@ -41,10 +45,6 @@ bool set_proto_json(httplib::Response& res, int status, const TProto& message) {
     }
     set_json(res, status, json);
     return true;
-}
-
-std::string json_error(const std::string& message) {
-    return std::string("{\"success\":false,\"message\":\"") + message + "\"}";
 }
 
 std::string get_bearer_token(const httplib::Request& req) {
