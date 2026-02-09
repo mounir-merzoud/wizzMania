@@ -59,11 +59,16 @@ public:
         const QJsonObject payload{{"content", bodyContent}};
         QNetworkReply* reply = m_network.post(req, QJsonDocument(payload).toJson(QJsonDocument::Compact));
         QObject::connect(reply, &QNetworkReply::finished, this, [this, reply, conversationId, bodyContent]() {
+            const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             const QByteArray raw = reply->readAll();
 
-            if (reply->error() != QNetworkReply::NoError) {
+            auto isHttpOk = [&](int status) {
+                return status >= 200 && status < 300;
+            };
+
+            if (reply->error() != QNetworkReply::NoError || !isHttpOk(httpStatus)) {
                 reply->deleteLater();
-                emit errorOccurred(QStringLiteral("Erreur envoi: %1").arg(formatNetworkError(reply, raw)));
+                emit errorOccurred(QStringLiteral("Erreur envoi (%1): %2").arg(httpStatus).arg(formatNetworkError(reply, raw)));
                 return;
             }
 
@@ -85,15 +90,20 @@ public slots:
         const QNetworkRequest req = makeRequest(QStringLiteral("/users"));
         QNetworkReply* reply = m_network.get(req);
         QObject::connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+            const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             const QByteArray raw = reply->readAll();
+
+            auto isHttpOk = [&](int status) {
+                return status >= 200 && status < 300;
+            };
 
             auto fail = [&](const QString& message) {
                 reply->deleteLater();
                 emit errorOccurred(message);
             };
 
-            if (reply->error() != QNetworkReply::NoError) {
-                fail(QStringLiteral("Erreur contacts: %1").arg(formatNetworkError(reply, raw)));
+            if (reply->error() != QNetworkReply::NoError || !isHttpOk(httpStatus)) {
+                fail(QStringLiteral("Erreur contacts (%1): %2").arg(httpStatus).arg(formatNetworkError(reply, raw)));
                 return;
             }
 
@@ -148,15 +158,20 @@ public slots:
 
         QNetworkReply* reply = m_network.get(req);
         QObject::connect(reply, &QNetworkReply::finished, this, [this, reply, cid]() {
+            const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             const QByteArray raw = reply->readAll();
+
+            auto isHttpOk = [&](int status) {
+                return status >= 200 && status < 300;
+            };
 
             auto fail = [&](const QString& message) {
                 reply->deleteLater();
                 emit errorOccurred(message);
             };
 
-            if (reply->error() != QNetworkReply::NoError) {
-                fail(QStringLiteral("Erreur messages: %1").arg(formatNetworkError(reply, raw)));
+            if (reply->error() != QNetworkReply::NoError || !isHttpOk(httpStatus)) {
+                fail(QStringLiteral("Erreur messages (%1): %2").arg(httpStatus).arg(formatNetworkError(reply, raw)));
                 return;
             }
 

@@ -28,6 +28,10 @@ public:
     std::vector<DbMessageRow> getHistory(const std::string& conversationKey, int limit);
 
 private:
+    void ensureConnectedLocked();
+    void reconnectLocked();
+
+    std::string connStr_;
     pqxx::connection conn_;
     std::mutex m_;
 };

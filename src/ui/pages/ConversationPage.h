@@ -53,6 +53,12 @@ public:
         headerLayout->addStretch();
         
         root->addWidget(header);
+
+        m_errorLabel = new QLabel(this);
+        m_errorLabel->setStyleSheet("color:#DC3545;font-size:13px;padding:8px 16px;background:" + StyleHelper::white() + ";border-bottom:1px solid " + StyleHelper::borderGray() + ";");
+        m_errorLabel->setWordWrap(true);
+        m_errorLabel->hide();
+        root->addWidget(m_errorLabel);
         
         // Messages area avec fond WhatsApp
         QScrollArea* scrollArea = new QScrollArea(this);
@@ -125,11 +131,18 @@ public:
                         reloadMessages();
                     }
                 });
+        connect(&MessagingService::instance(), &MessagingService::errorOccurred,
+                this, [this](const QString& err) {
+                    if (!m_errorLabel) return;
+                    m_errorLabel->setText(err);
+                    m_errorLabel->show();
+                });
     }
     
     void setContact(const Contact& contact) {
         m_currentContact = contact;
         m_headerName->setText(contact.name());
+        if (m_errorLabel) m_errorLabel->hide();
         reloadMessages();
         MessagingService::instance().refreshMessages(contact.id());
     }
@@ -191,6 +204,7 @@ private:
     
     QLabel* m_headerName;
     QVBoxLayout* m_messagesLayout;
+    QLabel* m_errorLabel = nullptr;
 
     Contact m_currentContact;
     QLineEdit* m_messageInput = nullptr;

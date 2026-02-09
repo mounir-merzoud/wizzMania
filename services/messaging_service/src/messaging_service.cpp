@@ -240,9 +240,15 @@ int main(int argc, char** argv) {
 
     MessagingServiceImpl service(*database);
     grpc::ServerBuilder builder;
-    builder.AddListeningPort(addr, grpc::InsecureServerCredentials());
+    int selectedPort = 0;
+    builder.AddListeningPort(addr, grpc::InsecureServerCredentials(), &selectedPort);
     builder.RegisterService(&service);
     auto server = builder.BuildAndStart();
+    if (!server || selectedPort == 0) {
+        std::cerr << "[messaging-service] Failed to bind/listen on " << addr
+                  << " (is the port already in use?)" << std::endl;
+        return 2;
+    }
     std::cout << "[messaging-service] listening on " << addr << std::endl;
     server->Wait();
     return 0;

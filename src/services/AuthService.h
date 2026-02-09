@@ -62,6 +62,10 @@ public:
             const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             const QByteArray raw = reply->readAll();
 
+            auto isHttpOk = [&](int status) {
+                return status >= 200 && status < 300;
+            };
+
             auto fail = [&](const QString& message) {
                 m_lastError = message;
                 emit authenticationFailed(message);
@@ -69,7 +73,7 @@ public:
                 promise.finish();
             };
 
-            if (reply->error() != QNetworkReply::NoError) {
+            if (reply->error() != QNetworkReply::NoError || !isHttpOk(httpStatus)) {
                 const QString detail = QString::fromUtf8(raw).trimmed();
                 const QString msg = detail.isEmpty()
                                         ? reply->errorString()

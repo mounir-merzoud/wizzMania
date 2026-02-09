@@ -39,6 +39,12 @@ public:
         headerLayout->addStretch();
         
         layout->addWidget(header);
+
+        m_errorLabel = new QLabel(this);
+        m_errorLabel->setStyleSheet("color:#DC3545;font-size:13px;padding:8px 16px;background:" + StyleHelper::white() + ";border-bottom:1px solid " + StyleHelper::borderGray() + ";");
+        m_errorLabel->setWordWrap(true);
+        m_errorLabel->hide();
+        layout->addWidget(m_errorLabel);
         
         // Search bar WhatsApp style
         QWidget* searchContainer = new QWidget(this);
@@ -89,6 +95,12 @@ public:
             this, &ContactsPage::onContactStatusChanged);
         connect(&MessagingService::instance(), &MessagingService::contactsUpdated,
             this, &ContactsPage::reloadContacts);
+        connect(&MessagingService::instance(), &MessagingService::errorOccurred,
+            this, [this](const QString& err) {
+                if (!m_errorLabel) return;
+                m_errorLabel->setText(err);
+                m_errorLabel->show();
+            });
 
         reloadContacts();
         MessagingService::instance().refreshContacts();
@@ -105,6 +117,7 @@ signals:
 private:
     void reloadContacts() {
         m_allContacts = MessagingService::instance().getContacts();
+        if (m_errorLabel) m_errorLabel->hide();
         applyFilter(m_searchBox ? m_searchBox->text() : QString());
     }
 
@@ -155,6 +168,7 @@ private:
 
     QVBoxLayout* m_contactsLayout = nullptr;
     QLineEdit* m_searchBox = nullptr;
+    QLabel* m_errorLabel = nullptr;
     QList<Contact> m_allContacts;
     QHash<QString, ContactRow*> m_rowsById;
 };

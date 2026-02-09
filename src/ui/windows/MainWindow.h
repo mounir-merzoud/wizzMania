@@ -20,18 +20,18 @@
 #include <functional>
 #include "../models/Contact.h"
 #include "../models/Message.h"
+#include "../services/MessagingService.h"
 #include "../utils/StyleHelper.h"
 
-// Structure pour une conversation
+// Item affiché dans la sidebar (construit depuis la liste backend des utilisateurs)
 struct Conversation {
+    QString contactId;
     QString contactName;
-    QString lastMessage;
-    QString timestamp;
-    bool hasUnread;
-    QVector<Message> messages;
-    
-    Conversation(const QString& name, const QString& msg, const QString& time, bool unread = false)
-        : contactName(name), lastMessage(msg), timestamp(time), hasUnread(unread) {}
+    bool hasUnread = false;
+
+    Conversation() = default;
+    Conversation(const QString& id, const QString& name)
+        : contactId(id), contactName(name) {}
 };
 
 class MainWindow : public QMainWindow {
@@ -41,9 +41,6 @@ public:
     explicit MainWindow(QWidget* parent = nullptr) : QMainWindow(parent) {
         setWindowTitle("MSF Messenger");
         setMinimumSize(1100, 700);
-        
-        // Initialiser les conversations démo
-        initConversations();
         
         QWidget* central = new QWidget(this);
         setCentralWidget(central);
@@ -62,58 +59,64 @@ public:
         
         mainLayout->addWidget(m_sidebar);
         mainLayout->addWidget(m_messagesPanel, 1);
-        
-        // Afficher la première conversation par défaut
-        if (!m_conversations.isEmpty()) {
-            selectConversation(0);
-        }
+
+        // Wire dynamique: contacts/messages viennent du backend via MessagingService
+        connect(&MessagingService::instance(), &MessagingService::contactsUpdated, this, [this]() {
+            rebuildConversationsFromContacts();
+            if (m_errorBanner) {
+                m_errorBanner->hide();
+                m_errorBanner->clear();
+            }
+        });
+        connect(&MessagingService::instance(), &MessagingService::messagesUpdated, this, [this](const QString& conversationId) {
+            if (m_selectedConversation < 0 || m_selectedConversation >= m_conversations.size()) {
+                return;
+            }
+            if (m_conversations[m_selectedConversation].contactId == conversationId) {
+                updateMessagesPanel();
+            }
+            updateConversationsList();
+        });
+        connect(&MessagingService::instance(), &MessagingService::errorOccurred, this, [](const QString& err) {
+            qDebug() << "Messaging error:" << err;
+        });
+
+        connect(&MessagingService::instance(), &MessagingService::errorOccurred, this, [this](const QString& err) {
+            if (!m_errorBanner) {
+                return;
+            }
+            m_errorBanner->setText(err);
+            m_errorBanner->show();
+        });
+
+        // Utiliser le cache existant si déjà rempli (login déjà fait)
+        rebuildConversationsFromContacts();
+        // Et déclencher un refresh réseau
+        MessagingService::instance().refreshContacts();
     }
     
 private:
-    void initConversations() {
-        // Conversation 1
-        Conversation conv1("Dr. Sarah Chen", "Les résultats sont arrivés...", "9:54 PM");
-        conv1.messages.append(Message("Bonjour, j'ai reçu les résultats des analyses", Message::Type::Received));
-        conv1.messages.append(Message("Merci de me les envoyer", Message::Type::Sent));
-        conv1.messages.append(Message("Les voici en pièce jointe", Message::Type::Received));
-        m_conversations.append(conv1);
-        
-        // Conversation 2
-        Conversation conv2("Coordination Urgences", "Nouvelle mission disponible", "4:27 PM");
-        conv2.messages.append(Message("Une nouvelle mission est disponible en Syrie", Message::Type::Received));
-        conv2.messages.append(Message("Quelles sont les détails?", Message::Type::Sent));
-        m_conversations.append(conv2);
-        
-        // Conversation 3
-        Conversation conv3("Dr. Maria Rodriguez", "Merci pour ton aide!", "10:12 AM");
-        conv3.messages.append(Message("Merci beaucoup pour ton aide hier", Message::Type::Received));
-        conv3.messages.append(Message("Avec plaisir! N'hésite pas si tu as besoin", Message::Type::Sent));
-        m_conversations.append(conv3);
-        
-        // Conversation 4
-        Conversation conv4("Équipe Logistique", "Approvisionnement validé", "Tue", true);
-        conv4.messages.append(Message("L'approvisionnement médical a été validé", Message::Type::Received));
-        m_conversations.append(conv4);
-        
-        // Conversation 5
-        Conversation conv5("Infirmière Sophie", "J'ai besoin de ton avis", "Tue");
-        conv5.messages.append(Message("Peux-tu me donner ton avis sur ce cas?", Message::Type::Received));
-        m_conversations.append(conv5);
-        
-        // Conversation 6
-        Conversation conv6("Dr. John Smith", "Document partagé", "Mon");
-        conv6.messages.append(Message("Je t'ai partagé le rapport", Message::Type::Received));
-        m_conversations.append(conv6);
-        
-        // Conversation 7
-        Conversation conv7("Dr. Ahmed Hassan", "Réunion à 15h", "Sun");
-        conv7.messages.append(Message("N'oublie pas la réunion cet après-midi", Message::Type::Received));
-        m_conversations.append(conv7);
-        
-        // Conversation 8
-        Conversation conv8("Tech Support", "Mise à jour disponible", "Sat");
-        conv8.messages.append(Message("Une nouvelle version est disponible", Message::Type::Received));
-        m_conversations.append(conv8);
+    void rebuildConversationsFromContacts() {
+        m_conversations.clear();
+        const QList<Contact> contacts = MessagingService::instance().getContacts();
+        m_conversations.reserve(contacts.size());
+        for (const auto& c : contacts) {
+            if (c.id().trimmed().isEmpty()) {
+                continue;
+            }
+            m_conversations.append(Conversation(c.id(), c.name()));
+        }
+
+        if (m_conversations.isEmpty()) {
+            m_selectedConversation = -1;
+        } else if (m_selectedConversation < 0 || m_selectedConversation >= m_conversations.size()) {
+            m_selectedConversation = 0;
+        }
+
+        updateConversationsList();
+        if (m_selectedConversation >= 0) {
+            updateMessagesPanel();
+        }
     }
     
     QWidget* createSidebar() {
@@ -187,6 +190,18 @@ private:
         tabsLayout->addStretch();
         
         layout->addWidget(tabs);
+
+        // Erreurs backend (évite l'impression de "liste vide" / "mock")
+        m_errorBanner = new QLabel(sidebar);
+        m_errorBanner->setWordWrap(true);
+        m_errorBanner->setStyleSheet(
+            "background:#F8D7DA;"
+            "color:#842029;"
+            "padding:10px 14px;"
+            "border-bottom:1px solid " + StyleHelper::borderGray() + ";"
+        );
+        m_errorBanner->hide();
+        layout->addWidget(m_errorBanner);
         
         // Conversations list
         QScrollArea* scrollArea = new QScrollArea(sidebar);
@@ -225,19 +240,23 @@ private:
         
         for (int i = 0; i < m_conversations.size(); ++i) {
             const auto& conv = m_conversations[i];
+
+            const QList<Message> msgs = MessagingService::instance().getMessages(conv.contactId);
+            const QString lastMessage = msgs.isEmpty() ? QStringLiteral("—") : msgs.last().content();
+            const QString timeStr = msgs.isEmpty() ? QString() : msgs.last().timestamp().toString("HH:mm");
             
             // Filtrer par recherche
             if (!searchText.isEmpty()) {
                 if (!conv.contactName.toLower().contains(searchText) && 
-                    !conv.lastMessage.toLower().contains(searchText)) {
+                    !lastMessage.toLower().contains(searchText)) {
                     continue;
                 }
             }
             
             QWidget* row = createConversationRow(
                 conv.contactName, 
-                conv.lastMessage, 
-                conv.timestamp, 
+                lastMessage, 
+                timeStr, 
                 conv.hasUnread,
                 i
             );
@@ -666,6 +685,12 @@ private:
         if (index < 0 || index >= m_conversations.size()) return;
         
         m_selectedConversation = index;
+
+        // Charger l'historique depuis le backend (async)
+        const QString cid = m_conversations[m_selectedConversation].contactId;
+        if (!cid.trimmed().isEmpty()) {
+            MessagingService::instance().refreshMessages(cid);
+        }
         
         // Rafraîchir la liste pour afficher la sélection
         updateConversationsList();
@@ -700,8 +725,9 @@ private:
         messagesLayout->setSpacing(12);
         messagesLayout->setAlignment(Qt::AlignTop);
         
-        // Ajouter tous les messages de la conversation
-        for (const Message& msg : conv.messages) {
+        // Ajouter tous les messages de la conversation (backend cache)
+        const QList<Message> messages = MessagingService::instance().getMessages(conv.contactId);
+        for (const Message& msg : messages) {
             QString timeStr = msg.timestamp().toString("HH:mm");
             bool isSent = (msg.type() == Message::Type::Sent);
             
@@ -796,23 +822,14 @@ private:
         }
         
         QString messageText = m_messageInput->text().trimmed();
-        
-        // Créer et ajouter le nouveau message
-        Message newMsg(messageText, Message::Type::Sent);
-        m_conversations[m_selectedConversation].messages.append(newMsg);
-        
-        // Mettre à jour le dernier message dans la conversation
-        m_conversations[m_selectedConversation].lastMessage = messageText;
-        m_conversations[m_selectedConversation].timestamp = QDateTime::currentDateTime().toString("HH:mm");
-        
+
         // Vider l'input
         m_messageInput->clear();
-        
-        // Rafraîchir l'affichage
-        updateMessagesPanel();
-        updateConversationsList();
-        
-        qDebug() << "Message sent:" << messageText;
+
+        const QString cid = m_conversations[m_selectedConversation].contactId;
+        if (!cid.trimmed().isEmpty()) {
+            MessagingService::instance().sendMessage(cid, messageText);
+        }
     }
     
     // Variables membres
@@ -820,6 +837,7 @@ private:
     QWidget* m_sidebar;
     QWidget* m_messagesPanel;
     QWidget* m_conversationsContainer;
+    QLabel* m_errorBanner = nullptr;
     QLineEdit* m_searchBox;
     QLineEdit* m_messageInput;
     QVBoxLayout* m_conversationsLayout;
