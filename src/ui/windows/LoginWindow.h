@@ -29,7 +29,7 @@ public:
         logo->setStyleSheet(
             "font-size:48px;"
             "font-weight:700;"
-            "color:" + StyleHelper::primaryBlue() + ";"
+            "color:" + StyleHelper::primaryRed() + ";"
             "letter-spacing:4px;"
         );
         
@@ -42,7 +42,7 @@ public:
         appName->setStyleSheet(
             "font-size:20px;"
             "font-weight:600;"
-            "color:" + StyleHelper::textDark() + ";"
+            "color:" + StyleHelper::darkGray() + ";"
             "margin-top:8px;"
         );
         
@@ -86,7 +86,7 @@ public:
         footer->setAlignment(Qt::AlignCenter);
         footer->setStyleSheet(
             "font-size:12px;"
-            "color:" + StyleHelper::textGray() + ";"
+            "color:" + StyleHelper::textLight() + ";"
         );
         footer->setWordWrap(true);
         
