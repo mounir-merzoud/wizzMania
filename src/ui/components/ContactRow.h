@@ -51,10 +51,10 @@ public:
         textLayout->setSpacing(4);
         
         m_nameLabel = new QLabel(contact.name(), textContainer);
-        m_nameLabel->setStyleSheet("font-size:15px;font-weight:500;color:" + StyleHelper::textDark() + ";");
+        m_nameLabel->setStyleSheet("font-size:15px;font-weight:500;color:" + StyleHelper::darkGray() + ";");
         
         m_statusLabel = new QLabel(contact.status(), textContainer);
-        m_statusLabel->setStyleSheet("font-size:13px;color:" + StyleHelper::textGray() + ";");
+        m_statusLabel->setStyleSheet("font-size:13px;color:" + StyleHelper::textLight() + ";");
         
         textLayout->addWidget(m_nameLabel);
         textLayout->addWidget(m_statusLabel);

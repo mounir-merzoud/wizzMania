@@ -36,7 +36,7 @@ public:
         QLabel* avatar = new QLabel(this);
         avatar->setFixedSize(40, 40);
         avatar->setStyleSheet(
-            "background:" + StyleHelper::primaryBlue() + ";"
+            "background:" + StyleHelper::primaryRed() + ";"
             "border-radius:20px;"
             "color:white;"
             "font-size:14px;"
@@ -46,7 +46,7 @@ public:
         avatar->setText("?");
         
         m_headerName = new QLabel("Conversation", this);
-        m_headerName->setStyleSheet("font-size:16px;font-weight:600;color:" + StyleHelper::textDark() + ";");
+        m_headerName->setStyleSheet("font-size:16px;font-weight:600;color:" + StyleHelper::darkGray() + ";");
         
         headerLayout->addWidget(avatar);
         headerLayout->addWidget(m_headerName);
@@ -97,7 +97,7 @@ public:
         m_sendBtn->setCursor(Qt::PointingHandCursor);
         m_sendBtn->setStyleSheet(
             "QPushButton {"
-            "  background:" + StyleHelper::primaryBlue() + ";"
+            "  background:" + StyleHelper::primaryRed() + ";"
             "  color:white;"
             "  border:none;"
             "  border-radius:22px;"
@@ -105,7 +105,7 @@ public:
             "  font-weight:bold;"
             "}"
             "QPushButton:hover {"
-            "  background:" + StyleHelper::primaryBlue() + ";"
+            "  background:" + StyleHelper::primaryRed() + ";"
             "  opacity:0.9;"
             "}"
         );

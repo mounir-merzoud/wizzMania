@@ -3,48 +3,44 @@
 #include <QString>
 
 /**
- * @brief Helper de styles pour l'application Médecins Sans Frontières
- * 
- * Design épuré et professionnel inspiré de WhatsApp :
- * - Fond blanc propre
- * - Accents bleu médical
- * - Interface minimaliste et fonctionnelle
+ * @brief Helper de styles pour MSF Messenger
+ * Palette officielle MSF: Rouge #D9001A, Gris foncé #3C3C3B, Noir #000000
  */
 namespace StyleHelper {
-    // Colors - Palette MSF
-    inline QString primaryBlue()   { return "#0066CC"; }  // Bleu médical MSF
-    inline QString darkBlue()      { return "#004C99"; }  // Bleu foncé pour hover
-    inline QString lightBlue()     { return "#E6F2FF"; }  // Bleu très clair pour fond
-    inline QString white()         { return "#FFFFFF"; }  // Blanc pur
-    inline QString lightGray()     { return "#F5F5F5"; }  // Gris très clair pour fond
-    inline QString borderGray()    { return "#E0E0E0"; }  // Gris pour bordures
-    inline QString textDark()      { return "#1F1F1F"; }  // Texte principal
-    inline QString textGray()      { return "#666666"; }  // Texte secondaire
-    inline QString greenOnline()   { return "#25D366"; }  // Vert WhatsApp pour "en ligne"
+    // MSF Color Palette
+    inline QString primaryRed()     { return "#D9001A"; }  // Rouge MSF
+    inline QString darkGray()       { return "#3C3C3B"; }  // Gris foncé
+    inline QString black()          { return "#000000"; }  // Noir
+    inline QString white()          { return "#FFFFFF"; }  // Blanc
+    inline QString lightGray()      { return "#F5F5F5"; }  // Fond clair
+    inline QString borderGray()     { return "#E5E5E5"; }  // Bordures
+    inline QString textLight()      { return "#8E8E93"; }  // Texte secondaire
+    inline QString bubbleReceived() { return "#F0F0F0"; }  // Bulle reçue
+    inline QString bubbleSent()     { return "#5B6F82"; }  // Bulle envoyée
     
-    // Common styles - Buttons
+    // Buttons
     inline QString primaryButton() {
         return "QPushButton {"
-               "  background:" + primaryBlue() + ";"
+               "  background:" + primaryRed() + ";"
                "  color:white;"
                "  border:none;"
                "  border-radius:8px;"
-               "  font-size:15px;"
-               "  font-weight:600;"
                "  padding:12px 24px;"
+               "  font-size:15px;"
+               "  font-weight:500;"
                "}"
                "QPushButton:hover {"
-               "  background:" + darkBlue() + ";"
+               "  background:#B80016;"
                "}"
                "QPushButton:pressed {"
-               "  background:#003366;"
+               "  background:#A00014;"
                "}";
     }
     
     inline QString secondaryButton() {
         return "QPushButton {"
                "  background:" + white() + ";"
-               "  color:" + primaryBlue() + ";"
+               "  color:" + darkGray() + ";"
                "  border:1px solid " + borderGray() + ";"
                "  border-radius:8px;"
                "  font-size:15px;"
@@ -61,46 +57,43 @@ namespace StyleHelper {
         return "QLineEdit {"
                "  background:" + white() + ";"
                "  border:1px solid " + borderGray() + ";"
-               "  border-radius:8px;"
-               "  padding:12px 16px;"
-               "  font-size:15px;"
-               "  color:" + textDark() + ";"
+               "  border-radius:20px;"
+               "  padding:10px 16px;"
+               "  font-size:14px;"
+               "  color:" + darkGray() + ";"
                "}"
                "QLineEdit:focus {"
-               "  border:2px solid " + primaryBlue() + ";"
-               "  padding:11px 15px;"
+               "  border:1px solid " + borderGray() + ";"
                "}";
     }
     
     // Cards
     inline QString cardStyle() {
         return "background:" + white() + ";"
-               "border:1px solid " + borderGray() + ";"
                "border-radius:12px;"
-               "padding:24px;";
+               "padding:20px;";
     }
     
     // Typography
     inline QString titleStyle() {
         return "font-size:24px;"
                "font-weight:600;"
-               "color:" + textDark() + ";";
+               "color:" + darkGray() + ";";
     }
     
     inline QString subtitleStyle() {
         return "font-size:18px;"
-               "font-weight:600;"
-               "color:" + textDark() + ";";
+               "font-weight:500;"
+               "color:" + darkGray() + ";";
     }
     
     inline QString bodyTextStyle() {
         return "font-size:15px;"
-               "color:" + textDark() + ";";
+               "color:" + darkGray() + ";";
     }
     
     inline QString secondaryTextStyle() {
         return "font-size:14px;"
-               "color:" + textGray() + ";";
+               "color:" + textLight() + ";";
     }
 }
-

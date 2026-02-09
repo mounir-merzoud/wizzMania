@@ -33,7 +33,7 @@ public:
         headerLayout->setContentsMargins(24, 0, 24, 0);
         
         QLabel* title = new QLabel("Conversations", header);
-        title->setStyleSheet("font-size:20px;font-weight:600;color:" + StyleHelper::textDark() + ";");
+        title->setStyleSheet("font-size:20px;font-weight:600;color:" + StyleHelper::darkGray() + ";");
         
         headerLayout->addWidget(title);
         headerLayout->addStretch();
@@ -58,7 +58,7 @@ public:
             "  border-radius:18px;"
             "  padding:8px 16px;"
             "  font-size:14px;"
-            "  color:" + StyleHelper::textDark() + ";"
+            "  color:" + StyleHelper::darkGray() + ";"
             "}"
             "QLineEdit:focus {"
             "  background:#E8E8E8;"
