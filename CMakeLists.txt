@@ -10,7 +10,7 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
 # Trouver Qt6
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Concurrent)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Concurrent Network)
 
 # Collecter tous les fichiers sources
 file(GLOB_RECURSE SOURCES
@@ -43,6 +43,7 @@ target_link_libraries(wizzMania
     Qt6::Gui
     Qt6::Widgets
     Qt6::Concurrent
+    Qt6::Network
 )
 
 # Configuration macOS

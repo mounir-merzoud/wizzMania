@@ -7,6 +7,8 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QMessageBox>
+#include <QFutureWatcher>
+#include "../../services/AuthService.h"
 #include "../utils/StyleHelper.h"
 
 class LoginWindow : public QWidget {
@@ -61,12 +63,12 @@ public:
         m_passwordInput->setEchoMode(QLineEdit::Password);
         m_passwordInput->setStyleSheet(StyleHelper::inputStyle());
         
-        QPushButton* loginBtn = new QPushButton("Sign In", this);
-        loginBtn->setStyleSheet(StyleHelper::primaryButton());
-        loginBtn->setMinimumHeight(48);
-        loginBtn->setCursor(Qt::PointingHandCursor);
+        m_loginBtn = new QPushButton("Sign In", this);
+        m_loginBtn->setStyleSheet(StyleHelper::primaryButton());
+        m_loginBtn->setMinimumHeight(48);
+        m_loginBtn->setCursor(Qt::PointingHandCursor);
         
-        connect(loginBtn, &QPushButton::clicked, this, &LoginWindow::onLoginClicked);
+        connect(m_loginBtn, &QPushButton::clicked, this, &LoginWindow::onLoginClicked);
         
         // Error label
         m_errorLabel = new QLabel(this);
@@ -78,7 +80,7 @@ public:
         mainLayout->addWidget(m_usernameInput);
         mainLayout->addWidget(m_passwordInput);
         mainLayout->addWidget(m_errorLabel);
-        mainLayout->addWidget(loginBtn);
+        mainLayout->addWidget(m_loginBtn);
         mainLayout->addStretch();
         
         // Footer discret
@@ -108,18 +110,42 @@ private slots:
             m_errorLabel->show();
             return;
         }
-        
-        // TODO: Connect to AuthService
-        if (username == "demo" && password == "demo") {
-            emit loginSuccessful(username);
-        } else {
-            m_errorLabel->setText("Identifiants invalides. Essayez demo/demo");
+
+        setUiBusy(true);
+        m_errorLabel->setText("Connexion...");
+        m_errorLabel->show();
+
+        auto future = AuthService::instance().login(username, password);
+        auto* watcher = new QFutureWatcher<User>(this);
+        connect(watcher, &QFutureWatcher<User>::finished, this, [this, watcher]() {
+            const User user = watcher->future().result();
+            watcher->deleteLater();
+            setUiBusy(false);
+
+            if (!user.id().isEmpty()) {
+                m_errorLabel->hide();
+                emit loginSuccessful(user.username());
+                return;
+            }
+
+            const QString msg = AuthService::instance().lastError().isEmpty()
+                                    ? QStringLiteral("Login échoué")
+                                    : AuthService::instance().lastError();
+            m_errorLabel->setText(msg);
             m_errorLabel->show();
-        }
+        });
+        watcher->setFuture(future);
+    }
+
+    void setUiBusy(bool busy) {
+        m_usernameInput->setEnabled(!busy);
+        m_passwordInput->setEnabled(!busy);
+        if (m_loginBtn) m_loginBtn->setEnabled(!busy);
     }
     
 private:
     QLineEdit* m_usernameInput;
     QLineEdit* m_passwordInput;
     QLabel* m_errorLabel;
+    QPushButton* m_loginBtn = nullptr;
 };

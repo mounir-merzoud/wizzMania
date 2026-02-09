@@ -4,6 +4,10 @@ project(gateway_service LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(MSVC)
+    add_compile_options(/FS)
+endif()
+
 find_package(Protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 
@@ -62,6 +66,7 @@ target_include_directories(gateway_service
     PRIVATE
         ${GENERATED_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
 
 target_link_libraries(gateway_service
