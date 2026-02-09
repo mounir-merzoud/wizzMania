@@ -2,16 +2,37 @@
 
 #include <QMainWindow>
 #include <QWidget>
-#include <QStackedWidget>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QLabel>
-#include "../pages/MapPage.h"
-#include "../pages/ContactsPage.h"
-#include "../pages/ConversationPage.h"
+#include <QLineEdit>
+#include <QScrollArea>
+#include <QScrollBar>
+#include <QFrame>
+#include <QVector>
+#include <QDateTime>
+#include <QTimer>
+#include <QEvent>
+#include <QMouseEvent>
+#include <QDebug>
+#include <QFontMetrics>
+#include <functional>
 #include "../models/Contact.h"
+#include "../models/Message.h"
 #include "../utils/StyleHelper.h"
+
+// Structure pour une conversation
+struct Conversation {
+    QString contactName;
+    QString lastMessage;
+    QString timestamp;
+    bool hasUnread;
+    QVector<Message> messages;
+    
+    Conversation(const QString& name, const QString& msg, const QString& time, bool unread = false)
+        : contactName(name), lastMessage(msg), timestamp(time), hasUnread(unread) {}
+};
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -21,121 +42,795 @@ public:
         setWindowTitle("MSF Messenger");
         setMinimumSize(1100, 700);
         
-        // Central widget
+        // Initialiser les conversations démo
+        initConversations();
+        
         QWidget* central = new QWidget(this);
         setCentralWidget(central);
-        central->setStyleSheet("background:" + StyleHelper::lightGray() + ";");
         
         QHBoxLayout* mainLayout = new QHBoxLayout(central);
         mainLayout->setContentsMargins(0, 0, 0, 0);
         mainLayout->setSpacing(0);
         
-        // Sidebar style WhatsApp
-        QWidget* sidebar = createSidebar();
-        sidebar->setFixedWidth(70);
+        // Left sidebar - Conversations list
+        m_sidebar = createSidebar();
+        m_sidebar->setFixedWidth(400);
+        m_sidebarVisible = true;
         
-        // Content area
-        m_stackedWidget = new QStackedWidget(this);
-        m_stackedWidget->setStyleSheet("background:" + StyleHelper::white() + ";");
+        // Right panel - Messages area
+        m_messagesPanel = createMessagesPanel();
         
-        // Add pages
-        m_contactsPage = new ContactsPage(m_stackedWidget);
-        m_conversationPage = new ConversationPage(m_stackedWidget);
+        mainLayout->addWidget(m_sidebar);
+        mainLayout->addWidget(m_messagesPanel, 1);
         
-        m_stackedWidget->addWidget(m_contactsPage);      // index 0
-        m_stackedWidget->addWidget(m_conversationPage);  // index 1
-        
-        // Connect contact selection
-        connect(m_contactsPage, &ContactsPage::contactClicked, 
-                this, &MainWindow::onContactSelected);
-        
-        mainLayout->addWidget(sidebar);
-        mainLayout->addWidget(m_stackedWidget, 1);
-        
-        // Show contacts by default
-        m_stackedWidget->setCurrentIndex(0);
+        // Afficher la première conversation par défaut
+        if (!m_conversations.isEmpty()) {
+            selectConversation(0);
+        }
     }
     
 private:
+    void initConversations() {
+        // Conversation 1
+        Conversation conv1("Dr. Sarah Chen", "Les résultats sont arrivés...", "9:54 PM");
+        conv1.messages.append(Message("Bonjour, j'ai reçu les résultats des analyses", Message::Type::Received));
+        conv1.messages.append(Message("Merci de me les envoyer", Message::Type::Sent));
+        conv1.messages.append(Message("Les voici en pièce jointe", Message::Type::Received));
+        m_conversations.append(conv1);
+        
+        // Conversation 2
+        Conversation conv2("Coordination Urgences", "Nouvelle mission disponible", "4:27 PM");
+        conv2.messages.append(Message("Une nouvelle mission est disponible en Syrie", Message::Type::Received));
+        conv2.messages.append(Message("Quelles sont les détails?", Message::Type::Sent));
+        m_conversations.append(conv2);
+        
+        // Conversation 3
+        Conversation conv3("Dr. Maria Rodriguez", "Merci pour ton aide!", "10:12 AM");
+        conv3.messages.append(Message("Merci beaucoup pour ton aide hier", Message::Type::Received));
+        conv3.messages.append(Message("Avec plaisir! N'hésite pas si tu as besoin", Message::Type::Sent));
+        m_conversations.append(conv3);
+        
+        // Conversation 4
+        Conversation conv4("Équipe Logistique", "Approvisionnement validé", "Tue", true);
+        conv4.messages.append(Message("L'approvisionnement médical a été validé", Message::Type::Received));
+        m_conversations.append(conv4);
+        
+        // Conversation 5
+        Conversation conv5("Infirmière Sophie", "J'ai besoin de ton avis", "Tue");
+        conv5.messages.append(Message("Peux-tu me donner ton avis sur ce cas?", Message::Type::Received));
+        m_conversations.append(conv5);
+        
+        // Conversation 6
+        Conversation conv6("Dr. John Smith", "Document partagé", "Mon");
+        conv6.messages.append(Message("Je t'ai partagé le rapport", Message::Type::Received));
+        m_conversations.append(conv6);
+        
+        // Conversation 7
+        Conversation conv7("Dr. Ahmed Hassan", "Réunion à 15h", "Sun");
+        conv7.messages.append(Message("N'oublie pas la réunion cet après-midi", Message::Type::Received));
+        m_conversations.append(conv7);
+        
+        // Conversation 8
+        Conversation conv8("Tech Support", "Mise à jour disponible", "Sat");
+        conv8.messages.append(Message("Une nouvelle version est disponible", Message::Type::Received));
+        m_conversations.append(conv8);
+    }
+    
     QWidget* createSidebar() {
         QWidget* sidebar = new QWidget(this);
-        sidebar->setStyleSheet(
-            "QWidget { "
-            "  background:" + StyleHelper::white() + ";"
-            "  border-right:1px solid " + StyleHelper::borderGray() + ";"
-            "}"
-        );
+        sidebar->setStyleSheet("background:" + StyleHelper::white() + ";");
         
         QVBoxLayout* layout = new QVBoxLayout(sidebar);
-        layout->setContentsMargins(0, 16, 0, 16);
-        layout->setSpacing(8);
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->setSpacing(0);
         
-        // Logo MSF en haut
-        QLabel* logo = new QLabel("MSF", sidebar);
-        logo->setAlignment(Qt::AlignCenter);
-        logo->setStyleSheet(
-            "font-size:18px;"
-            "font-weight:700;"
-            "color:" + StyleHelper::primaryBlue() + ";"
-            "padding:12px 0;"
-            "background:transparent;"
+        // Header avec menu + search + new chat
+        QWidget* header = new QWidget(sidebar);
+        header->setFixedHeight(60);
+        header->setStyleSheet("background:" + StyleHelper::white() + "; border-bottom:1px solid " + StyleHelper::borderGray() + ";");
+        
+        QHBoxLayout* headerLayout = new QHBoxLayout(header);
+        headerLayout->setContentsMargins(16, 0, 16, 0);
+        headerLayout->setSpacing(12);
+        
+        m_searchBox = new QLineEdit(header);
+        m_searchBox->setPlaceholderText("Search");
+        m_searchBox->setStyleSheet(
+            "QLineEdit {"
+            "  background:" + StyleHelper::lightGray() + ";"
+            "  border:none;"
+            "  border-radius:18px;"
+            "  padding:8px 16px;"
+            "  font-size:14px;"
+            "  color:" + StyleHelper::black() + ";"
+            "}"
+            "QLineEdit:focus {"
+            "  background:#E8E8E8;"
+            "}"
         );
+        connect(m_searchBox, &QLineEdit::textChanged, this, &MainWindow::onSearchTextChanged);
         
-        layout->addWidget(logo);
-        layout->addSpacing(24);
+        QPushButton* newChatBtn = new QPushButton("✎", header);
+        newChatBtn->setFixedSize(40, 40);
+        newChatBtn->setStyleSheet(
+            "QPushButton { background:transparent; border:none; font-size:20px; color:" + StyleHelper::darkGray() + "; border-radius:8px; }"
+            "QPushButton:hover { background:rgba(0,0,0,0.03); }"
+            "QPushButton:pressed { background:rgba(0,0,0,0.08); }"
+        );
+        connect(newChatBtn, &QPushButton::clicked, this, &MainWindow::onNewChatClicked);
         
-        // Navigation buttons - icônes simples (texte pour l'instant)
-        QPushButton* chatsBtn = createNavButton("💬");
-        QPushButton* settingsBtn = createNavButton("⚙️");
+        headerLayout->addWidget(m_searchBox, 1);
+        headerLayout->addWidget(newChatBtn);
         
-        connect(chatsBtn, &QPushButton::clicked, [this]() { 
-            m_stackedWidget->setCurrentIndex(0); 
-        });
+        layout->addWidget(header);
         
-        layout->addWidget(chatsBtn);
-        layout->addStretch();
+        // Tabs (All Chats, Projects, Important)
+        QWidget* tabs = new QWidget(sidebar);
+        tabs->setFixedHeight(48);
+        tabs->setStyleSheet("background:" + StyleHelper::white() + "; border-bottom:1px solid " + StyleHelper::borderGray() + ";");
         
-        // Settings et logout en bas
-        layout->addWidget(settingsBtn);
+        QHBoxLayout* tabsLayout = new QHBoxLayout(tabs);
+        tabsLayout->setContentsMargins(16, 0, 16, 0);
+        tabsLayout->setSpacing(24);
         
-        QPushButton* logoutBtn = createNavButton("🚪");
-        connect(logoutBtn, &QPushButton::clicked, this, &MainWindow::logoutRequested);
-        layout->addWidget(logoutBtn);
+        m_allChatsTab = createTab("All Chats", true);
+        m_projectsTab = createTab("Projects", false);
+        m_importantTab = createTab("Important", false);
+        
+        connect(m_allChatsTab, &QPushButton::clicked, [this]() { switchTab(0); });
+        connect(m_projectsTab, &QPushButton::clicked, [this]() { switchTab(1); });
+        connect(m_importantTab, &QPushButton::clicked, [this]() { switchTab(2); });
+        
+        tabsLayout->addWidget(m_allChatsTab);
+        tabsLayout->addWidget(m_projectsTab);
+        tabsLayout->addWidget(m_importantTab);
+        tabsLayout->addStretch();
+        
+        layout->addWidget(tabs);
+        
+        // Conversations list
+        QScrollArea* scrollArea = new QScrollArea(sidebar);
+        scrollArea->setWidgetResizable(true);
+        scrollArea->setFrameShape(QFrame::NoFrame);
+        scrollArea->setStyleSheet("background:" + StyleHelper::white() + "; border:none;");
+        
+        m_conversationsContainer = new QWidget();
+        m_conversationsLayout = new QVBoxLayout(m_conversationsContainer);
+        m_conversationsLayout->setContentsMargins(0, 0, 0, 0);
+        m_conversationsLayout->setSpacing(0);
+        
+        // Remplir avec les conversations
+        updateConversationsList();
+        
+        m_conversationsLayout->addStretch();
+        scrollArea->setWidget(m_conversationsContainer);
+        
+        layout->addWidget(scrollArea, 1);
         
         return sidebar;
     }
     
-    QPushButton* createNavButton(const QString& icon) {
-        QPushButton* btn = new QPushButton(icon, this);
-        btn->setFixedSize(54, 54);
-        btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet(
-            "QPushButton {"
-            "  background:transparent;"
-            "  border:none;"
-            "  font-size:24px;"
-            "  border-radius:12px;"
-            "}"
-            "QPushButton:hover {"
-            "  background:" + StyleHelper::lightBlue() + ";"
-            "}"
-            "QPushButton:pressed {"
-            "  background:" + StyleHelper::borderGray() + ";"
-            "}"
-        );
-        return btn;
+    void updateConversationsList() {
+        // Supprimer les anciens widgets
+        while (m_conversationsLayout->count() > 1) {
+            QLayoutItem* item = m_conversationsLayout->takeAt(0);
+            if (item->widget()) {
+                item->widget()->deleteLater();
+            }
+            delete item;
+        }
+        
+        // Ajouter les conversations filtrées
+        QString searchText = m_searchBox ? m_searchBox->text().toLower() : "";
+        
+        for (int i = 0; i < m_conversations.size(); ++i) {
+            const auto& conv = m_conversations[i];
+            
+            // Filtrer par recherche
+            if (!searchText.isEmpty()) {
+                if (!conv.contactName.toLower().contains(searchText) && 
+                    !conv.lastMessage.toLower().contains(searchText)) {
+                    continue;
+                }
+            }
+            
+            QWidget* row = createConversationRow(
+                conv.contactName, 
+                conv.lastMessage, 
+                conv.timestamp, 
+                conv.hasUnread,
+                i
+            );
+            m_conversationsLayout->insertWidget(m_conversationsLayout->count() - 1, row);
+        }
     }
     
-    void onContactSelected(const Contact& contact) {
-        m_conversationPage->setContact(contact);
-        m_stackedWidget->setCurrentIndex(1);
+    QPushButton* createTab(const QString& text, bool active) {
+        QPushButton* tab = new QPushButton(text);
+        tab->setCursor(Qt::PointingHandCursor);
+        tab->setFixedHeight(48);
+        
+        if (active) {
+            tab->setStyleSheet(
+                "QPushButton {"
+                "  background:transparent;"
+                "  border:none;"
+                "  border-bottom:2px solid " + StyleHelper::primaryRed() + ";"
+                "  color:" + StyleHelper::black() + ";"
+                "  font-size:14px;"
+                "  font-weight:500;"
+                "  padding:0 4px;"
+                "}"
+            );
+        } else {
+            tab->setStyleSheet(
+                "QPushButton {"
+                "  background:transparent;"
+                "  border:none;"
+                "  color:" + StyleHelper::textLight() + ";"
+                "  font-size:14px;"
+                "  padding:0 4px;"
+                "}"
+                "QPushButton:hover {"
+                "  color:" + StyleHelper::darkGray() + ";"
+                "}"
+            );
+        }
+        return tab;
     }
+    
+    
+    QWidget* createConversationRow(const QString& name, const QString& message, const QString& time, bool hasNotification, int conversationIndex) {
+        QWidget* row = new QWidget();
+        row->setFixedHeight(64);
+        row->setCursor(Qt::PointingHandCursor);
+        row->setProperty("conversationIndex", conversationIndex);
+        
+        // Style avec sélection - plus épuré
+        QString baseStyle = 
+            "QWidget {"
+            "  background:" + (m_selectedConversation == conversationIndex ? "#F0F0F0" : StyleHelper::white()) + ";"
+            "  border-left:3px solid " + (m_selectedConversation == conversationIndex ? StyleHelper::primaryRed() : "transparent") + ";"
+            "}"
+            "QWidget:hover {"
+            "  background:#F8F8F8;"
+            "}";
+        row->setStyleSheet(baseStyle);
+        
+        // Connecter le clic
+        row->installEventFilter(new ClickableWidget(this, [this, conversationIndex]() {
+            selectConversation(conversationIndex);
+        }));
+        
+        QHBoxLayout* rowLayout = new QHBoxLayout(row);
+        rowLayout->setContentsMargins(20, 12, 20, 12);
+        rowLayout->setSpacing(14);
+        
+        // Avatar circulaire avec initiales
+        QLabel* avatar = new QLabel();
+        avatar->setFixedSize(40, 40);
+        
+        // Extraire initiales du nom
+        QString initials;
+        QStringList nameParts = name.split(" ");
+        if (nameParts.size() >= 2) {
+            initials = QString(nameParts[0][0]) + QString(nameParts[1][0]);
+        } else if (!nameParts.isEmpty()) {
+            initials = QString(nameParts[0][0]);
+        }
+        
+        avatar->setText(initials);
+        avatar->setAlignment(Qt::AlignCenter);
+        avatar->setStyleSheet(
+            "background:" + StyleHelper::primaryRed() + ";"
+            "color:white;"
+            "border-radius:20px;"
+            "font-size:14px;"
+            "font-weight:600;"
+        );
+        
+        // Bloc unique pour nom + message + time
+        QWidget* infoBlock = new QWidget();
+        QVBoxLayout* infoLayout = new QVBoxLayout(infoBlock);
+        infoLayout->setContentsMargins(0, 0, 0, 0);
+        infoLayout->setSpacing(2);
+        
+        // Ligne 1: Nom + Time
+        QWidget* topLine = new QWidget();
+        QHBoxLayout* topLayout = new QHBoxLayout(topLine);
+        topLayout->setContentsMargins(0, 0, 0, 0);
+        topLayout->setSpacing(8);
+        
+        QLabel* nameLabel = new QLabel(name);
+        nameLabel->setStyleSheet("font-size:14px; font-weight:600; color:" + StyleHelper::black() + ";");
+        
+        QLabel* timeLabel = new QLabel(time);
+        timeLabel->setStyleSheet("font-size:11px; color:" + StyleHelper::textLight() + ";");
+        
+        topLayout->addWidget(nameLabel);
+        topLayout->addStretch();
+        topLayout->addWidget(timeLabel);
+        
+        // Ligne 2: Message + Badge
+        QWidget* bottomLine = new QWidget();
+        QHBoxLayout* bottomLayout = new QHBoxLayout(bottomLine);
+        bottomLayout->setContentsMargins(0, 0, 0, 0);
+        bottomLayout->setSpacing(8);
+        
+        QLabel* messageLabel = new QLabel(message);
+        messageLabel->setStyleSheet("font-size:13px; color:" + StyleHelper::textLight() + ";");
+        messageLabel->setWordWrap(false);
+        messageLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        
+        QFontMetrics metrics(messageLabel->font());
+        QString elidedText = metrics.elidedText(message, Qt::ElideRight, 250);
+        messageLabel->setText(elidedText);
+        
+        bottomLayout->addWidget(messageLabel, 1);
+        
+        if (hasNotification) {
+            QLabel* badge = new QLabel("1");
+            badge->setFixedSize(18, 18);
+            badge->setAlignment(Qt::AlignCenter);
+            badge->setStyleSheet(
+                "background:" + StyleHelper::primaryRed() + ";"
+                "color:white;"
+                "border-radius:9px;"
+                "font-size:10px;"
+                "font-weight:600;"
+            );
+            bottomLayout->addWidget(badge);
+        }
+        
+        infoLayout->addWidget(topLine);
+        infoLayout->addWidget(bottomLine);
+        
+        rowLayout->addWidget(avatar);
+        rowLayout->addWidget(infoBlock, 1);
+        
+        return row;
+    }
+    
+    // Helper class pour rendre les widgets cliquables
+    class ClickableWidget : public QObject {
+    public:
+        ClickableWidget(QObject* parent, std::function<void()> callback)
+            : QObject(parent), m_callback(callback) {}
+        
+    protected:
+        bool eventFilter(QObject* obj, QEvent* event) override {
+            if (event->type() == QEvent::MouseButtonPress) {
+                m_callback();
+                return true;
+            }
+            return QObject::eventFilter(obj, event);
+        }
+        
+    private:
+        std::function<void()> m_callback;
+    };
+    
+    QWidget* createMessagesPanel() {
+        QWidget* panel = new QWidget();
+        panel->setStyleSheet("background:" + StyleHelper::lightGray() + ";");
+        
+        QVBoxLayout* layout = new QVBoxLayout(panel);
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->setSpacing(0);
+        
+        // Header
+        QWidget* header = new QWidget();
+        header->setObjectName("messagesHeader");
+        header->setFixedHeight(60);
+        header->setStyleSheet("background:" + StyleHelper::white() + "; border-bottom:1px solid " + StyleHelper::borderGray() + ";");
+        
+        QHBoxLayout* headerLayout = new QHBoxLayout(header);
+        headerLayout->setContentsMargins(24, 0, 24, 0);
+        headerLayout->setSpacing(12);
+        
+        // Bouton menu burger (toujours visible)
+        QPushButton* menuBtn = new QPushButton("☰");
+        menuBtn->setFixedSize(40, 40);
+        menuBtn->setStyleSheet(
+            "QPushButton { background:transparent; border:none; font-size:20px; color:" + StyleHelper::darkGray() + "; border-radius:8px; }"
+            "QPushButton:hover { background:rgba(0,0,0,0.03); }"
+            "QPushButton:pressed { background:rgba(0,0,0,0.08); }"
+        );
+        connect(menuBtn, &QPushButton::clicked, this, &MainWindow::onMenuClicked);
+        
+        QLabel* avatar = new QLabel();
+        avatar->setFixedSize(40, 40);
+        avatar->setStyleSheet("background:#C0C0C0; border-radius:20px;");
+        
+        QLabel* contactName = new QLabel("Select a conversation");
+        contactName->setObjectName("contactNameLabel");
+        contactName->setStyleSheet("font-size:20px; font-weight:600; color:" + StyleHelper::black() + ";");
+        
+        headerLayout->addWidget(menuBtn);
+        headerLayout->addWidget(avatar);
+        headerLayout->addWidget(contactName);
+        headerLayout->addStretch();
+        
+        QPushButton* searchBtn = new QPushButton("🔍");
+        searchBtn->setFixedSize(36, 36);
+        searchBtn->setStyleSheet(
+            "QPushButton { background:transparent; border:none; font-size:18px; border-radius:8px; }"
+            "QPushButton:hover { background:rgba(0,0,0,0.03); }"
+            "QPushButton:pressed { background:rgba(0,0,0,0.08); }"
+        );
+        connect(searchBtn, &QPushButton::clicked, this, &MainWindow::onSearchInConversationClicked);
+        
+        QPushButton* moreBtn = new QPushButton("⋯");
+        moreBtn->setFixedSize(36, 36);
+        moreBtn->setStyleSheet(
+            "QPushButton { background:transparent; border:none; font-size:20px; border-radius:8px; }"
+            "QPushButton:hover { background:rgba(0,0,0,0.03); }"
+            "QPushButton:pressed { background:rgba(0,0,0,0.08); }"
+        );
+        connect(moreBtn, &QPushButton::clicked, this, &MainWindow::onMoreOptionsClicked);
+        
+        headerLayout->addWidget(searchBtn);
+        headerLayout->addWidget(moreBtn);
+        
+        // Messages area
+        QScrollArea* messagesArea = new QScrollArea();
+        messagesArea->setObjectName("messagesScrollArea");
+        messagesArea->setWidgetResizable(true);
+        messagesArea->setFrameShape(QFrame::NoFrame);
+        messagesArea->setStyleSheet("background:" + StyleHelper::lightGray() + "; border:none;");
+        
+        QWidget* messagesContainer = new QWidget();
+        QVBoxLayout* messagesLayout = new QVBoxLayout(messagesContainer);
+        messagesLayout->setContentsMargins(24, 16, 24, 16);
+        messagesLayout->setSpacing(12);
+        messagesLayout->setAlignment(Qt::AlignTop);
+        
+        QLabel* emptyLabel = new QLabel("Select a conversation to start messaging");
+        emptyLabel->setAlignment(Qt::AlignCenter);
+        emptyLabel->setStyleSheet("font-size:14px; color:" + StyleHelper::textLight() + "; padding:40px;");
+        messagesLayout->addWidget(emptyLabel);
+        
+        messagesLayout->addStretch();
+        messagesArea->setWidget(messagesContainer);
+        
+        // Input bar
+        QWidget* inputBar = new QWidget();
+        inputBar->setFixedHeight(64);
+        inputBar->setStyleSheet("background:" + StyleHelper::white() + ";");
+        
+        QHBoxLayout* inputLayout = new QHBoxLayout(inputBar);
+        inputLayout->setContentsMargins(16, 12, 16, 12);
+        inputLayout->setSpacing(12);
+        
+        QPushButton* attachBtn = new QPushButton("📎");
+        attachBtn->setFixedSize(40, 40);
+        attachBtn->setStyleSheet(
+            "QPushButton { background:transparent; border:none; font-size:20px; border-radius:8px; }"
+            "QPushButton:hover { background:rgba(0,0,0,0.03); }"
+            "QPushButton:pressed { background:rgba(0,0,0,0.08); }"
+        );
+        connect(attachBtn, &QPushButton::clicked, this, &MainWindow::onAttachFileClicked);
+        
+        m_messageInput = new QLineEdit();
+        m_messageInput->setPlaceholderText("Message");
+        m_messageInput->setStyleSheet(
+            "QLineEdit {"
+            "  background:" + StyleHelper::lightGray() + ";"
+            "  border:none;"
+            "  border-radius:20px;"
+            "  padding:10px 16px;"
+            "  font-size:14px;"
+            "  color:" + StyleHelper::black() + ";"
+            "}"
+            "QLineEdit:focus {"
+            "  background:#E8E8E8;"
+            "}"
+        );
+        connect(m_messageInput, &QLineEdit::returnPressed, this, &MainWindow::onSendMessage);
+        
+        QPushButton* emojiBtn = new QPushButton("☺");
+        emojiBtn->setFixedSize(40, 40);
+        emojiBtn->setStyleSheet(
+            "QPushButton { background:transparent; border:none; font-size:20px; color:" + StyleHelper::darkGray() + "; border-radius:8px; }"
+            "QPushButton:hover { background:rgba(0,0,0,0.03); }"
+            "QPushButton:pressed { background:rgba(0,0,0,0.08); }"
+        );
+        connect(emojiBtn, &QPushButton::clicked, this, &MainWindow::onEmojiClicked);
+        
+        m_sendBtn = new QPushButton("➤");
+        m_sendBtn->setFixedSize(40, 40);
+        m_sendBtn->setStyleSheet(
+            "QPushButton { background:" + StyleHelper::primaryRed() + "; border:none; font-size:18px; color:white; border-radius:20px; }"
+            "QPushButton:hover { background:#C20016; }"
+            "QPushButton:pressed { background:#A50013; }"
+        );
+        connect(m_sendBtn, &QPushButton::clicked, this, &MainWindow::onSendMessage);
+        
+        inputLayout->addWidget(attachBtn);
+        inputLayout->addWidget(m_messageInput, 1);
+        inputLayout->addWidget(emojiBtn);
+        inputLayout->addWidget(m_sendBtn);
+        
+        layout->addWidget(header);
+        layout->addWidget(messagesArea, 1);
+        layout->addWidget(inputBar);
+        
+        return panel;
+    }
+    
+    QWidget* createMessageBubble(const QString& text, bool isSent, const QString& time, bool isMedia) {
+        QWidget* container = new QWidget();
+        QHBoxLayout* containerLayout = new QHBoxLayout(container);
+        containerLayout->setContentsMargins(0, 0, 0, 0);
+        
+        if (isSent) {
+            containerLayout->addStretch();
+            
+            QWidget* bubble = new QWidget();
+            bubble->setMaximumWidth(400);
+            bubble->setStyleSheet(
+                "background:" + StyleHelper::bubbleSent() + ";"
+                "border-radius:12px;"
+                "border-top-right-radius:4px;"
+            );
+            
+            QVBoxLayout* bubbleLayout = new QVBoxLayout(bubble);
+            bubbleLayout->setContentsMargins(12, 10, 12, 10);
+            
+            if (isMedia) {
+                QLabel* mediaBox = new QLabel(text);
+                mediaBox->setFixedSize(300, 180);
+                mediaBox->setAlignment(Qt::AlignCenter);
+                mediaBox->setStyleSheet("background:#808080; color:white; font-size:14px; border-radius:8px;");
+                bubbleLayout->addWidget(mediaBox);
+            } else {
+                QLabel* textLabel = new QLabel(text);
+                textLabel->setWordWrap(true);
+                textLabel->setStyleSheet("color:white; font-size:14px;");
+                bubbleLayout->addWidget(textLabel);
+            }
+            
+            QLabel* timeLabel = new QLabel(time + " ✓✓");
+            timeLabel->setStyleSheet("font-size:11px; color:rgba(255,255,255,0.7);");
+            timeLabel->setAlignment(Qt::AlignRight);
+            bubbleLayout->addWidget(timeLabel);
+            
+            containerLayout->addWidget(bubble);
+        } else {
+            QWidget* bubble = new QWidget();
+            bubble->setMaximumWidth(400);
+            bubble->setStyleSheet(
+                "background:" + StyleHelper::white() + ";"
+                "border-radius:12px;"
+                "border-top-left-radius:4px;"
+            );
+            
+            QVBoxLayout* bubbleLayout = new QVBoxLayout(bubble);
+            bubbleLayout->setContentsMargins(12, 10, 12, 10);
+            
+            QLabel* textLabel = new QLabel(text);
+            textLabel->setWordWrap(true);
+            textLabel->setStyleSheet("color:" + StyleHelper::black() + "; font-size:14px;");
+            bubbleLayout->addWidget(textLabel);
+            
+            QLabel* timeLabel = new QLabel(time);
+            timeLabel->setStyleSheet("font-size:11px; color:" + StyleHelper::textLight() + ";");
+            bubbleLayout->addWidget(timeLabel);
+            
+            containerLayout->addWidget(bubble);
+            containerLayout->addStretch();
+        }
+        
+        return container;
+    }
+    
+    QWidget* createVoiceMessageBubble(const QString& time) {
+        QWidget* container = new QWidget();
+        QHBoxLayout* containerLayout = new QHBoxLayout(container);
+        containerLayout->setContentsMargins(0, 0, 0, 0);
+        containerLayout->addStretch();
+        
+        QWidget* bubble = new QWidget();
+        bubble->setFixedSize(200, 200);
+        bubble->setStyleSheet(
+            "background:" + StyleHelper::bubbleSent() + ";"
+            "border-radius:100px;"
+        );
+        
+        QVBoxLayout* bubbleLayout = new QVBoxLayout(bubble);
+        bubbleLayout->setAlignment(Qt::AlignCenter);
+        
+        QLabel* icon = new QLabel("🔇");
+        icon->setAlignment(Qt::AlignCenter);
+        icon->setStyleSheet("font-size:32px;");
+        bubbleLayout->addWidget(icon);
+        
+        QLabel* timeLabel = new QLabel(time + " ✓");
+        timeLabel->setStyleSheet("font-size:11px; color:rgba(255,255,255,0.7);");
+        timeLabel->setAlignment(Qt::AlignCenter);
+        
+        QVBoxLayout* mainLayout = new QVBoxLayout();
+        mainLayout->setContentsMargins(0, 0, 0, 0);
+        mainLayout->addWidget(bubble);
+        mainLayout->addWidget(timeLabel);
+        
+        QWidget* wrapper = new QWidget();
+        wrapper->setLayout(mainLayout);
+        
+        containerLayout->addWidget(wrapper);
+        
+        return container;
+    }
+    
+    void selectConversation(int index) {
+        if (index < 0 || index >= m_conversations.size()) return;
+        
+        m_selectedConversation = index;
+        
+        // Rafraîchir la liste pour afficher la sélection
+        updateConversationsList();
+        
+        // Mettre à jour le panneau de messages
+        updateMessagesPanel();
+    }
+    
+    void updateMessagesPanel() {
+        if (m_selectedConversation < 0 || m_selectedConversation >= m_conversations.size()) {
+            return;
+        }
+        
+        const Conversation& conv = m_conversations[m_selectedConversation];
+        
+        // Mettre à jour le header avec le nom du contact
+        QWidget* header = m_messagesPanel->findChild<QWidget*>("messagesHeader");
+        if (header) {
+            QLabel* contactName = header->findChild<QLabel*>("contactNameLabel");
+            if (contactName) {
+                contactName->setText(conv.contactName);
+            }
+        }
+        
+        // Nettoyer les anciens messages
+        QScrollArea* scrollArea = m_messagesPanel->findChild<QScrollArea*>("messagesScrollArea");
+        if (!scrollArea) return;
+        
+        QWidget* messagesContainer = new QWidget();
+        QVBoxLayout* messagesLayout = new QVBoxLayout(messagesContainer);
+        messagesLayout->setContentsMargins(20, 20, 20, 20);
+        messagesLayout->setSpacing(12);
+        messagesLayout->setAlignment(Qt::AlignTop);
+        
+        // Ajouter tous les messages de la conversation
+        for (const Message& msg : conv.messages) {
+            QString timeStr = msg.timestamp().toString("HH:mm");
+            bool isSent = (msg.type() == Message::Type::Sent);
+            
+            messagesLayout->addWidget(createMessageBubble(
+                msg.content(),  // text
+                isSent,         // isSent
+                timeStr,        // time
+                false           // isMedia
+            ));
+        }
+        
+        messagesLayout->addStretch();
+        scrollArea->setWidget(messagesContainer);
+        
+        // Scroller vers le bas
+        QTimer::singleShot(100, [scrollArea]() {
+            scrollArea->verticalScrollBar()->setValue(scrollArea->verticalScrollBar()->maximum());
+        });
+    }
+    
+    void onSearchTextChanged() {
+        updateConversationsList();
+    }
+    
+    void switchTab(int tabIndex) {
+        // Mettre à jour les styles des onglets
+        QString activeStyle = 
+            "QPushButton { background:transparent; color:" + StyleHelper::primaryRed() + "; font-weight:600; padding:8px 16px; border:none; border-bottom:2px solid " + StyleHelper::primaryRed() + "; }"
+            "QPushButton:hover { background:" + StyleHelper::lightGray() + "; }";
+        
+        QString inactiveStyle = 
+            "QPushButton { background:transparent; color:" + StyleHelper::textLight() + "; font-weight:500; padding:8px 16px; border:none; border-bottom:2px solid transparent; }"
+            "QPushButton:hover { background:" + StyleHelper::lightGray() + "; }";
+        
+        m_allChatsTab->setStyleSheet(tabIndex == 0 ? activeStyle : inactiveStyle);
+        m_projectsTab->setStyleSheet(tabIndex == 1 ? activeStyle : inactiveStyle);
+        m_importantTab->setStyleSheet(tabIndex == 2 ? activeStyle : inactiveStyle);
+        
+        m_currentTab = tabIndex;
+        
+        // Mettre à jour la liste (on peut filtrer par catégorie plus tard)
+        updateConversationsList();
+    }
+    
+    // Handlers pour les boutons
+    void onMenuClicked() {
+        m_sidebarVisible = !m_sidebarVisible;
+        
+        if (m_sidebarVisible) {
+            m_sidebar->setFixedWidth(400);
+            m_sidebar->show();
+        } else {
+            m_sidebar->setFixedWidth(0);
+            m_sidebar->hide();
+        }
+        
+        qDebug() << "Menu clicked - Sidebar" << (m_sidebarVisible ? "visible" : "hidden");
+    }
+    
+    void onNewChatClicked() {
+        // TODO: Ouvrir dialogue pour nouvelle conversation
+        qDebug() << "New chat clicked - À implémenter";
+    }
+    
+    void onSearchInConversationClicked() {
+        // TODO: Activer recherche dans la conversation actuelle
+        qDebug() << "Search in conversation clicked - À implémenter";
+    }
+    
+    void onMoreOptionsClicked() {
+        // TODO: Menu contextuel (Mute, Archive, Delete)
+        qDebug() << "More options clicked - À implémenter";
+    }
+    
+    void onAttachFileClicked() {
+        // TODO: Ouvrir sélecteur de fichiers
+        qDebug() << "Attach file clicked - À implémenter";
+    }
+    
+    void onEmojiClicked() {
+        // TODO: Afficher sélecteur d'émojis (MSF - peut-être désactiver)
+        qDebug() << "Emoji clicked - À implémenter";
+    }
+    
+    void onSendMessage() {
+        if (!m_messageInput || m_messageInput->text().trimmed().isEmpty()) {
+            return;
+        }
+        
+        if (m_selectedConversation < 0 || m_selectedConversation >= m_conversations.size()) {
+            return;
+        }
+        
+        QString messageText = m_messageInput->text().trimmed();
+        
+        // Créer et ajouter le nouveau message
+        Message newMsg(messageText, Message::Type::Sent);
+        m_conversations[m_selectedConversation].messages.append(newMsg);
+        
+        // Mettre à jour le dernier message dans la conversation
+        m_conversations[m_selectedConversation].lastMessage = messageText;
+        m_conversations[m_selectedConversation].timestamp = QDateTime::currentDateTime().toString("HH:mm");
+        
+        // Vider l'input
+        m_messageInput->clear();
+        
+        // Rafraîchir l'affichage
+        updateMessagesPanel();
+        updateConversationsList();
+        
+        qDebug() << "Message sent:" << messageText;
+    }
+    
+    // Variables membres
+    QVector<Conversation> m_conversations;
+    QWidget* m_sidebar;
+    QWidget* m_messagesPanel;
+    QWidget* m_conversationsContainer;
+    QLineEdit* m_searchBox;
+    QLineEdit* m_messageInput;
+    QVBoxLayout* m_conversationsLayout;
+    QPushButton* m_allChatsTab;
+    QPushButton* m_projectsTab;
+    QPushButton* m_importantTab;
+    QPushButton* m_sendBtn;
+    int m_selectedConversation = -1;
+    int m_currentTab = 0;
+    bool m_sidebarVisible = true;
     
 signals:
     void logoutRequested();
-    
-private:
-    QStackedWidget* m_stackedWidget;
-    ContactsPage* m_contactsPage;
-    ConversationPage* m_conversationPage;
 };
