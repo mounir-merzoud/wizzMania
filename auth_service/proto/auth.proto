@@ -10,6 +10,9 @@ service AuthService {
   rpc ValidateToken (ValidateTokenRequest) returns (ValidateTokenResponse);
   rpc RevokeTokens (RevokeTokensRequest) returns (RevokeTokensResponse);
 
+  // Admin only
+  rpc DeleteUser (DeleteUserRequest) returns (DeleteUserResponse);
+
   // Users directory
   rpc ListUsers (ListUsersRequest) returns (ListUsersResponse);
   
@@ -98,6 +101,17 @@ message RevokeTokensRequest {
 
 message RevokeTokensResponse {
   bool success = 1;
+}
+
+// Suppression utilisateur (admin seulement)
+message DeleteUserRequest {
+  string admin_token = 1;
+  string user_id = 2;
+}
+
+message DeleteUserResponse {
+  bool success = 1;
+  string message = 2;
 }
 
 // Gestion des rôles

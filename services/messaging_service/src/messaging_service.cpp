@@ -37,6 +37,23 @@ private:
 
     Database& db_;
 
+    static bool parse_room_id(const std::string& conversationId, int* outConvId) {
+        if (!outConvId) return false;
+        const std::string prefix = "room:";
+        if (conversationId.rfind(prefix, 0) != 0) return false;
+        const auto rest = conversationId.substr(prefix.size());
+        if (rest.empty()) return false;
+        try {
+            size_t idx = 0;
+            const int v = std::stoi(rest, &idx);
+            if (idx != rest.size()) return false;
+            *outConvId = v;
+            return true;
+        } catch (...) {
+            return false;
+        }
+    }
+
     static std::optional<int> parse_int(const std::string& s) {
         if (s.empty()) return std::nullopt;
         try {
@@ -124,6 +141,18 @@ public:
             return grpc::Status(grpc::StatusCode::INTERNAL, "Internal error");
         }
 
+        // Access control (rooms): if requester_id is provided and conversation_id is a room:<id>,
+        // require that requester is a participant.
+        if (!req->requester_id().empty() && !req->conversation_id().empty()) {
+            const auto requesterId = parse_int(req->requester_id());
+            int roomConvId = 0;
+            if (requesterId.has_value() && parse_room_id(req->conversation_id(), &roomConvId)) {
+                if (!db_.isParticipant(roomConvId, *requesterId)) {
+                    return grpc::Status(grpc::StatusCode::PERMISSION_DENIED, "Not a participant");
+                }
+            }
+        }
+
         std::vector<DbMessageRow> rows;
         try {
             rows = db_.getHistory(req->conversation_id(), req->limit());
@@ -142,6 +171,141 @@ public:
         }
 
         return grpc::Status::OK;
+    }
+
+    grpc::Status CreateConversation(grpc::ServerContext*,
+                                   const CreateConversationRequest* req,
+                                   CreateConversationResponse* resp) override {
+        if (!req || !resp) {
+            return grpc::Status(grpc::StatusCode::INTERNAL, "Internal error");
+        }
+
+        const auto creatorId = parse_int(req->creator_id());
+        if (!creatorId.has_value()) {
+            resp->set_success(false);
+            resp->set_message("Invalid creator_id");
+            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Invalid creator_id");
+        }
+        if (req->title().empty()) {
+            resp->set_success(false);
+            resp->set_message("Missing title");
+            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Missing title");
+        }
+
+        int convId = 0;
+        try {
+            convId = db_.createGroupConversation(req->title());
+        } catch (const std::exception& e) {
+            resp->set_success(false);
+            resp->set_message(std::string("DB error: ") + e.what());
+            return grpc::Status(grpc::StatusCode::INTERNAL, "DB error");
+        }
+
+        // Always add creator.
+        db_.addParticipant(convId, *creatorId);
+
+        // Add provided participants.
+        for (const auto& pid : req->participant_ids()) {
+            const auto u = parse_int(pid);
+            if (!u.has_value()) continue;
+            (void)db_.addParticipant(convId, *u);
+        }
+
+        resp->set_success(true);
+        resp->set_message("OK");
+        resp->set_conversation_id("room:" + std::to_string(convId));
+        return grpc::Status::OK;
+    }
+
+    grpc::Status AddParticipants(grpc::ServerContext*,
+                                const AddParticipantsRequest* req,
+                                AddParticipantsResponse* resp) override {
+        if (!req || !resp) {
+            return grpc::Status(grpc::StatusCode::INTERNAL, "Internal error");
+        }
+
+        int convId = 0;
+        if (!parse_room_id(req->conversation_id(), &convId)) {
+            resp->set_success(false);
+            resp->set_message("Invalid conversation_id (expected room:<id>)");
+            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Invalid conversation_id");
+        }
+
+        bool ok = true;
+        for (const auto& pid : req->participant_ids()) {
+            const auto u = parse_int(pid);
+            if (!u.has_value()) {
+                ok = false;
+                continue;
+            }
+            ok = db_.addParticipant(convId, *u) && ok;
+        }
+
+        resp->set_success(ok);
+        resp->set_message(ok ? "OK" : "Some participants could not be added");
+        return ok ? grpc::Status::OK : grpc::Status(grpc::StatusCode::INTERNAL, "Failed to add participants");
+    }
+
+    grpc::Status ListConversations(grpc::ServerContext*,
+                                  const ListConversationsRequest* req,
+                                  ListConversationsResponse* resp) override {
+        if (!req || !resp) {
+            return grpc::Status(grpc::StatusCode::INTERNAL, "Internal error");
+        }
+        const auto userId = parse_int(req->user_id());
+        if (!userId.has_value()) {
+            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Invalid user_id");
+        }
+
+        const int limit = req->limit() <= 0 ? 200 : std::max(1, std::min(1000, req->limit()));
+
+        std::vector<DbConversationRow> rows;
+        try {
+            rows = db_.listConversationsForUser(*userId, limit);
+        } catch (const std::exception& e) {
+            return grpc::Status(grpc::StatusCode::INTERNAL, std::string("DB error: ") + e.what());
+        }
+
+        for (const auto& c : rows) {
+            auto* out = resp->add_conversations();
+            out->set_conversation_id("room:" + std::to_string(c.id_conversations));
+            out->set_title(c.title);
+            out->set_type(c.type);
+            out->set_last_timestamp_unix(c.last_timestamp_unix);
+        }
+
+        return grpc::Status::OK;
+    }
+
+    grpc::Status DeleteConversation(grpc::ServerContext*,
+                                   const DeleteConversationRequest* req,
+                                   DeleteConversationResponse* resp) override {
+        if (!req || !resp) {
+            return grpc::Status(grpc::StatusCode::INTERNAL, "Internal error");
+        }
+
+        int convId = 0;
+        if (!parse_room_id(req->conversation_id(), &convId)) {
+            resp->set_success(false);
+            resp->set_message("Invalid conversation_id (expected room:<id>)");
+            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Invalid conversation_id");
+        }
+
+        try {
+            const bool ok = db_.deleteConversationById(convId);
+            if (!ok) {
+                resp->set_success(false);
+                resp->set_message("Room not found");
+                return grpc::Status(grpc::StatusCode::NOT_FOUND, "Not found");
+            }
+            resp->set_success(true);
+            resp->set_message("OK");
+            return grpc::Status::OK;
+        } catch (const std::exception& e) {
+            resp->set_success(false);
+            resp->set_message(std::string("DB error: ") + e.what());
+            return grpc::Status(grpc::StatusCode::INTERNAL, "DB error");
+        }
     }
 
     grpc::Status ChatStream(grpc::ServerContext*,

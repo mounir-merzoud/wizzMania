@@ -290,3 +290,164 @@ std::vector<DbMessageRow> Database::getHistory(const std::string& conversationKe
         throw;
     }
 }
+
+int Database::createGroupConversation(const std::string& title) {
+    std::lock_guard<std::mutex> lk(m_);
+
+    const auto attempt = [&]() {
+        ensureConnectedLocked();
+        pqxx::work tx(conn_);
+
+        auto r = tx.exec_params(
+            "INSERT INTO conversations(title, type) VALUES ($1, 'group') RETURNING id_conversations",
+            title);
+        if (r.empty()) {
+            throw std::runtime_error("Failed to create conversation");
+        }
+        const int convId = r[0][0].as<int>();
+        tx.commit();
+        return convId;
+    };
+
+    try {
+        return attempt();
+    } catch (const pqxx::failure& e) {
+        if (!conn_.is_open() || is_likely_connection_loss(e.what())) {
+            reconnectLocked();
+            return attempt();
+        }
+        throw;
+    }
+}
+
+bool Database::addParticipant(int conversationId, int userId) {
+    std::lock_guard<std::mutex> lk(m_);
+
+    const auto attempt = [&]() {
+        ensureConnectedLocked();
+        pqxx::work tx(conn_);
+        tx.exec_params(
+            "INSERT INTO conversation_participant(id_users, id_conversations) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            userId,
+            conversationId);
+        tx.commit();
+        return true;
+    };
+
+    try {
+        return attempt();
+    } catch (const pqxx::failure& e) {
+        if (!conn_.is_open() || is_likely_connection_loss(e.what())) {
+            reconnectLocked();
+            return attempt();
+        }
+        throw;
+    } catch (...) {
+        return false;
+    }
+}
+
+bool Database::isParticipant(int conversationId, int userId) {
+    std::lock_guard<std::mutex> lk(m_);
+
+    const auto attempt = [&]() {
+        ensureConnectedLocked();
+        pqxx::work tx(conn_);
+        auto r = tx.exec_params(
+            "SELECT 1 FROM conversation_participant WHERE id_conversations = $1 AND id_users = $2 LIMIT 1",
+            conversationId,
+            userId);
+        const bool ok = !r.empty();
+        tx.commit();
+        return ok;
+    };
+
+    try {
+        return attempt();
+    } catch (const pqxx::failure& e) {
+        if (!conn_.is_open() || is_likely_connection_loss(e.what())) {
+            reconnectLocked();
+            return attempt();
+        }
+        return false;
+    } catch (...) {
+        return false;
+    }
+}
+
+std::vector<DbConversationRow> Database::listConversationsForUser(int userId, int limit) {
+    std::lock_guard<std::mutex> lk(m_);
+
+    const auto attempt = [&]() {
+        ensureConnectedLocked();
+        pqxx::work tx(conn_);
+
+        std::string sql =
+            "SELECT c.id_conversations, c.title, c.type, "
+            "COALESCE(MAX(EXTRACT(EPOCH FROM m.created_at)::bigint), 0) AS last_ts "
+            "FROM conversations c "
+            "JOIN conversation_participant cp ON cp.id_conversations = c.id_conversations "
+            "LEFT JOIN messages m ON m.conversation_id = c.id_conversations "
+            "WHERE cp.id_users = $1 "
+            "GROUP BY c.id_conversations, c.title, c.type "
+            "ORDER BY last_ts DESC, c.id_conversations DESC";
+        if (limit > 0) {
+            sql += " LIMIT $2";
+        }
+
+        pqxx::result r;
+        if (limit > 0) {
+            r = tx.exec_params(sql, userId, limit);
+        } else {
+            r = tx.exec_params(sql, userId);
+        }
+
+        std::vector<DbConversationRow> out;
+        out.reserve(r.size());
+        for (const auto& row : r) {
+            DbConversationRow c;
+            c.id_conversations = row[0].as<int>();
+            c.title = row[1].as<std::string>();
+            c.type = row[2].as<std::string>();
+            c.last_timestamp_unix = row[3].as<long long>();
+            out.push_back(std::move(c));
+        }
+
+        tx.commit();
+        return out;
+    };
+
+    try {
+        return attempt();
+    } catch (const pqxx::failure& e) {
+        if (!conn_.is_open() || is_likely_connection_loss(e.what())) {
+            reconnectLocked();
+            return attempt();
+        }
+        throw;
+    }
+}
+
+bool Database::deleteConversationById(int conversationId) {
+    std::lock_guard<std::mutex> lk(m_);
+
+    const auto attempt = [&]() {
+        ensureConnectedLocked();
+        pqxx::work tx(conn_);
+        pqxx::result r = tx.exec_params(
+            "DELETE FROM conversations WHERE id_conversations = $1",
+            conversationId);
+        tx.commit();
+        return r.affected_rows() > 0;
+    };
+
+    try {
+        return attempt();
+    } catch (const pqxx::failure& e) {
+        if (!conn_.is_open() || is_likely_connection_loss(e.what())) {
+            reconnectLocked();
+            return attempt();
+        }
+        throw;
+    }
+}

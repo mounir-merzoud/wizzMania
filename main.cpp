@@ -41,14 +41,22 @@ int main(int argc, char *argv[]) {
         // Create and show main window
         mainWindow = new MainWindow();
         mainWindow->show();
+
+        // If the backend invalidates the session (e.g. refresh revoked), return to login.
+        QObject::connect(&AuthService::instance(), &AuthService::userLoggedOut, [&]() {
+            if (mainWindow) {
+                mainWindow->close();
+                delete mainWindow;
+                mainWindow = nullptr;
+            }
+            loginWindow->show();
+        });
         
         // Connect logout signal
         QObject::connect(mainWindow, &MainWindow::logoutRequested, [&]() {
-            mainWindow->close();
-            delete mainWindow;
-            mainWindow = nullptr;
-            
-            loginWindow->show();
+            // Best-effort server logout (revocation) then clear local session.
+            AuthService::instance().logoutFromServer();
+            AuthService::instance().logout();
         });
     });
     

@@ -13,7 +13,9 @@ set(CMAKE_AUTORCC ON)
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Concurrent Network)
 
 # Collecter tous les fichiers sources
-file(GLOB_RECURSE SOURCES
+# NOTE: CONFIGURE_DEPENDS permet à CMake de reconfigurer automatiquement quand de nouveaux fichiers
+# (ex: un nouveau QWidget/QObject header avec Q_OBJECT) sont ajoutés.
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
     "src/*.cpp"
     "src/*.h"
 )

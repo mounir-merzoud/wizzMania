@@ -16,11 +16,20 @@
 #include <QEvent>
 #include <QMouseEvent>
 #include <QDebug>
+#include <QMessageBox>
 #include <QFontMetrics>
+#include <QMenu>
+#include <QCursor>
+#include <QHash>
 #include <functional>
 #include "../models/Contact.h"
 #include "../models/Message.h"
 #include "../services/MessagingService.h"
+#include "../services/AuthService.h"
+#include "CreateUserDialog.h"
+#include "CreateRoomDialog.h"
+#include "DeleteUserDialog.h"
+#include "DeleteRoomDialog.h"
 #include "../utils/StyleHelper.h"
 
 // Item affiché dans la sidebar (construit depuis la liste backend des utilisateurs)
@@ -577,70 +586,71 @@ private:
         return panel;
     }
     
-    QWidget* createMessageBubble(const QString& text, bool isSent, const QString& time, bool isMedia) {
-        QWidget* container = new QWidget();
-        QHBoxLayout* containerLayout = new QHBoxLayout(container);
-        containerLayout->setContentsMargins(0, 0, 0, 0);
-        
-        if (isSent) {
-            containerLayout->addStretch();
-            
-            QWidget* bubble = new QWidget();
-            bubble->setMaximumWidth(400);
-            bubble->setStyleSheet(
-                "background:" + StyleHelper::bubbleSent() + ";"
-                "border-radius:12px;"
-                "border-top-right-radius:4px;"
-            );
-            
-            QVBoxLayout* bubbleLayout = new QVBoxLayout(bubble);
-            bubbleLayout->setContentsMargins(12, 10, 12, 10);
-            
-            if (isMedia) {
-                QLabel* mediaBox = new QLabel(text);
-                mediaBox->setFixedSize(300, 180);
-                mediaBox->setAlignment(Qt::AlignCenter);
-                mediaBox->setStyleSheet("background:#808080; color:white; font-size:14px; border-radius:8px;");
-                bubbleLayout->addWidget(mediaBox);
-            } else {
-                QLabel* textLabel = new QLabel(text);
-                textLabel->setWordWrap(true);
-                textLabel->setStyleSheet("color:white; font-size:14px;");
-                bubbleLayout->addWidget(textLabel);
-            }
-            
-            QLabel* timeLabel = new QLabel(time + " ✓✓");
-            timeLabel->setStyleSheet("font-size:11px; color:rgba(255,255,255,0.7);");
-            timeLabel->setAlignment(Qt::AlignRight);
-            bubbleLayout->addWidget(timeLabel);
-            
-            containerLayout->addWidget(bubble);
-        } else {
-            QWidget* bubble = new QWidget();
-            bubble->setMaximumWidth(400);
-            bubble->setStyleSheet(
-                "background:" + StyleHelper::white() + ";"
-                "border-radius:12px;"
-                "border-top-left-radius:4px;"
-            );
-            
-            QVBoxLayout* bubbleLayout = new QVBoxLayout(bubble);
-            bubbleLayout->setContentsMargins(12, 10, 12, 10);
-            
-            QLabel* textLabel = new QLabel(text);
-            textLabel->setWordWrap(true);
-            textLabel->setStyleSheet("color:" + StyleHelper::black() + "; font-size:14px;");
-            bubbleLayout->addWidget(textLabel);
-            
-            QLabel* timeLabel = new QLabel(time);
-            timeLabel->setStyleSheet("font-size:11px; color:" + StyleHelper::textLight() + ";");
-            bubbleLayout->addWidget(timeLabel);
-            
-            containerLayout->addWidget(bubble);
-            containerLayout->addStretch();
+    static QString formatMessageTimestamp(const QDateTime& ts) {
+        if (!ts.isValid()) {
+            return QString();
         }
-        
-        return container;
+
+        const QDate today = QDate::currentDate();
+        if (ts.date() == today) {
+            return ts.toString("HH:mm");
+        }
+        return ts.toString("dd/MM HH:mm");
+    }
+
+    QWidget* createMessageListItem(const QString& sender,
+                                  const QString& text,
+                                  const QString& time,
+                                  bool showHeader) {
+        QWidget* root = new QWidget();
+        QVBoxLayout* rootLayout = new QVBoxLayout(root);
+        rootLayout->setContentsMargins(0, 0, 0, 0);
+        rootLayout->setSpacing(4);
+
+        if (showHeader) {
+            QWidget* header = new QWidget(root);
+            QHBoxLayout* headerLayout = new QHBoxLayout(header);
+            headerLayout->setContentsMargins(0, 0, 0, 0);
+            headerLayout->setSpacing(8);
+
+            QLabel* senderLabel = new QLabel(sender);
+            senderLabel->setStyleSheet(
+                "font-size:13px;"
+                "font-weight:600;"
+                "color:" + StyleHelper::darkGray() + ";"
+            );
+            QLabel* timeLabel = new QLabel(time);
+            timeLabel->setStyleSheet(
+                "font-size:12px;"
+                "color:" + StyleHelper::textLight() + ";"
+            );
+
+            headerLayout->addWidget(senderLabel);
+            headerLayout->addStretch();
+            headerLayout->addWidget(timeLabel);
+
+            rootLayout->addWidget(header);
+        }
+
+        QLabel* textLabel = new QLabel(text);
+        textLabel->setWordWrap(true);
+        textLabel->setStyleSheet(
+            "font-size:14px;"
+            "color:" + StyleHelper::black() + ";"
+        );
+        rootLayout->addWidget(textLabel);
+
+        if (!showHeader) {
+            QLabel* timeLabel = new QLabel(time);
+            timeLabel->setAlignment(Qt::AlignRight);
+            timeLabel->setStyleSheet(
+                "font-size:12px;"
+                "color:" + StyleHelper::textLight() + ";"
+            );
+            rootLayout->addWidget(timeLabel);
+        }
+
+        return root;
     }
     
     QWidget* createVoiceMessageBubble(const QString& time) {
@@ -664,7 +674,7 @@ private:
         icon->setStyleSheet("font-size:32px;");
         bubbleLayout->addWidget(icon);
         
-        QLabel* timeLabel = new QLabel(time + " ✓");
+        QLabel* timeLabel = new QLabel(time);
         timeLabel->setStyleSheet("font-size:11px; color:rgba(255,255,255,0.7);");
         timeLabel->setAlignment(Qt::AlignCenter);
         
@@ -725,18 +735,53 @@ private:
         messagesLayout->setSpacing(12);
         messagesLayout->setAlignment(Qt::AlignTop);
         
+        // Build id -> name mapping from cached contacts (for room messages)
+        QHash<QString, QString> idToName;
+        {
+            const QList<Contact> contacts = MessagingService::instance().getContacts();
+            idToName.reserve(contacts.size());
+            for (const auto& c : contacts) {
+                if (!c.id().trimmed().isEmpty() && !c.name().trimmed().isEmpty()) {
+                    idToName.insert(c.id(), c.name());
+                }
+            }
+        }
+
         // Ajouter tous les messages de la conversation (backend cache)
         const QList<Message> messages = MessagingService::instance().getMessages(conv.contactId);
+        QString lastSenderKey;
+        QDate lastDate;
         for (const Message& msg : messages) {
-            QString timeStr = msg.timestamp().toString("HH:mm");
-            bool isSent = (msg.type() == Message::Type::Sent);
-            
-            messagesLayout->addWidget(createMessageBubble(
-                msg.content(),  // text
-                isSent,         // isSent
-                timeStr,        // time
-                false           // isMedia
+            const QString timeStr = formatMessageTimestamp(msg.timestamp());
+
+            // Sender key: for Sent, force a stable key; for Received, use senderId if present.
+            const bool isSent = (msg.type() == Message::Type::Sent);
+            QString senderKey = isSent ? QStringLiteral("__me__") : msg.senderId().trimmed();
+            if (!isSent && senderKey.isEmpty()) {
+                // Fallback for backward-compat when senderId isn't provided.
+                senderKey = QStringLiteral("__other__");
+            }
+
+            QString senderName;
+            if (isSent) {
+                senderName = QStringLiteral("Vous");
+            } else {
+                // For DMs, the conversation header already is the contact name; still show it.
+                senderName = idToName.value(senderKey, conv.contactName);
+            }
+
+            const QDate msgDate = msg.timestamp().date();
+            const bool showHeader = (senderKey != lastSenderKey) || (!lastDate.isValid() || msgDate != lastDate);
+
+            messagesLayout->addWidget(createMessageListItem(
+                senderName,
+                msg.content(),
+                timeStr,
+                showHeader
             ));
+
+            lastSenderKey = senderKey;
+            lastDate = msgDate;
         }
         
         messagesLayout->addStretch();
@@ -788,8 +833,61 @@ private:
     }
     
     void onNewChatClicked() {
-        // TODO: Ouvrir dialogue pour nouvelle conversation
-        qDebug() << "New chat clicked - À implémenter";
+        if (AuthService::instance().isAdmin()) {
+            QMenu menu(this);
+            QAction* createUser = menu.addAction(QStringLiteral("Créer utilisateur"));
+            QAction* createRoom = menu.addAction(QStringLiteral("Créer salon"));
+            menu.addSeparator();
+            QAction* deleteUser = menu.addAction(QStringLiteral("Supprimer utilisateur"));
+            QAction* deleteRoom = menu.addAction(QStringLiteral("Supprimer salon"));
+
+            QAction* picked = menu.exec(QCursor::pos());
+            if (!picked) {
+                return;
+            }
+
+            if (picked == createUser) {
+                CreateUserDialog dlg(this);
+                connect(&dlg, &CreateUserDialog::userCreated, this, []() {
+                    MessagingService::instance().refreshContacts();
+                });
+                dlg.exec();
+                return;
+            }
+
+            if (picked == createRoom) {
+                CreateRoomDialog dlg(this);
+                connect(&dlg, &CreateRoomDialog::roomCreated, this, []() {
+                    MessagingService::instance().refreshContacts();
+                });
+                dlg.exec();
+                return;
+            }
+
+            if (picked == deleteUser) {
+                DeleteUserDialog dlg(this);
+                connect(&dlg, &DeleteUserDialog::userDeleted, this, []() {
+                    MessagingService::instance().refreshContacts();
+                });
+                dlg.exec();
+                return;
+            }
+
+            if (picked == deleteRoom) {
+                DeleteRoomDialog dlg(this);
+                connect(&dlg, &DeleteRoomDialog::roomDeleted, this, []() {
+                    MessagingService::instance().refreshContacts();
+                });
+                dlg.exec();
+                return;
+            }
+
+            return;
+        }
+
+        QMessageBox::information(this,
+                                 QStringLiteral("Info"),
+                                 QStringLiteral("Création d'utilisateur réservée aux administrateurs."));
     }
     
     void onSearchInConversationClicked() {
@@ -808,8 +906,53 @@ private:
     }
     
     void onEmojiClicked() {
-        // TODO: Afficher sélecteur d'émojis (MSF - peut-être désactiver)
-        qDebug() << "Emoji clicked - À implémenter";
+        if (!m_messageInput) {
+            return;
+        }
+
+        QMenu menu(this);
+        menu.setStyleSheet(
+            "QMenu {"
+            "  background:" + StyleHelper::white() + ";"
+            "  border:1px solid " + StyleHelper::borderGray() + ";"
+            "  padding:6px;"
+            "}"
+            "QMenu::item {"
+            "  padding:8px 10px;"
+            "  border-radius:8px;"
+            "  color:" + StyleHelper::black() + ";"
+            "}"
+            "QMenu::item:selected {"
+            "  background:" + StyleHelper::lightGray() + ";"
+            "}"
+        );
+
+        const QStringList emojis{
+            QStringLiteral("😀"), QStringLiteral("😁"), QStringLiteral("😂"), QStringLiteral("🙂"),
+            QStringLiteral("😉"), QStringLiteral("😍"), QStringLiteral("😎"), QStringLiteral("🤔"),
+            QStringLiteral("😢"), QStringLiteral("😡"), QStringLiteral("👍"), QStringLiteral("👎"),
+            QStringLiteral("🙏"), QStringLiteral("👏"), QStringLiteral("🎉"), QStringLiteral("❤️")
+        };
+
+        QAction* picked = nullptr;
+        for (const auto& e : emojis) {
+            QAction* a = menu.addAction(e);
+            a->setData(e);
+        }
+
+        picked = menu.exec(QCursor::pos());
+        if (!picked) {
+            return;
+        }
+
+        const QString e = picked->data().toString();
+        if (e.isEmpty()) {
+            return;
+        }
+
+        // Insert at cursor.
+        m_messageInput->insert(e);
+        m_messageInput->setFocus();
     }
     
     void onSendMessage() {

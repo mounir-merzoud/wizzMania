@@ -32,6 +32,7 @@ try {
   $login = $loginJson | ConvertFrom-Json
   if (-not $login.access_token) { throw "Login n'a pas retourné access_token." }
   $accessToken = $login.access_token
+  $refreshToken = $login.refresh_token
 
   # ValidateToken
   $validateReq = @{ access_token = $accessToken } | ConvertTo-Json -Compress
@@ -40,8 +41,21 @@ try {
   Write-Host $validateJson
   $validate = $validateJson | ConvertFrom-Json
 
+  # RefreshToken (if server returns it)
+  if ($refreshToken) {
+    $refreshReq = @{ refresh_token = $refreshToken } | ConvertTo-Json -Compress
+    Write-Host "\nCalling RefreshToken..."
+    $refreshJson = & $grpcurl -plaintext -proto $protoPath -d $refreshReq $Server "securecloud.auth.AuthService/RefreshToken"
+    Write-Host $refreshJson
+    $refresh = $refreshJson | ConvertFrom-Json
+    if (-not $refresh.access_token) { throw "RefreshToken n'a pas retourné access_token." }
+  } else {
+    Write-Host "\nRefreshToken: refresh_token vide (LoginResponse)."
+  }
+
   Write-Host "\n--- Résumé ---"
   Write-Host ("Access Token: {0}" -f $accessToken)
+  if ($refreshToken) { Write-Host ("Refresh Token: {0}" -f $refreshToken) }
   Write-Host ("Valid:        {0}" -f $validate.valid)
   if ($validate.user_id) { Write-Host ("User ID:      {0}" -f $validate.user_id) }
   if ($validate.permissions) { Write-Host ("Permissions:  {0}" -f ($validate.permissions -join ", ")) }
