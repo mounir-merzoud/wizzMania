@@ -72,3 +72,8 @@ target_link_libraries(test_client
     protobuf::libprotobuf
     Threads::Threads
 )
+
+# --- Tests unitaires ---
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()

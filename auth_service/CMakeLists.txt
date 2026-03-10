@@ -79,3 +79,8 @@ message(STATUS "✅ Configuration terminée pour auth_service")
 message(STATUS "  - Protobuf include dir: ${Protobuf_INCLUDE_DIRS}")
 message(STATUS "  - gRPC include dir: ${gRPC_INCLUDE_DIRS}")
 message(STATUS "  - Output dir: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+
+# --- Tests unitaires ---
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()

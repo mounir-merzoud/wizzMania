@@ -350,6 +350,8 @@ static void load_env_best_effort() {
 #endif
 }
 
+// Quand le fichier est inclus dans les tests unitaires, on ne compile pas main().
+#ifndef MESSAGING_SERVICE_IMPL_ONLY
 int main(int argc, char** argv) {
     std::string addr = "0.0.0.0:7002";
     if (argc > 1 && argv[1] && std::string(argv[1]).size() > 0) {
@@ -417,3 +419,4 @@ int main(int argc, char** argv) {
     server->Wait();
     return 0;
 }
+#endif // MESSAGING_SERVICE_IMPL_ONLY
