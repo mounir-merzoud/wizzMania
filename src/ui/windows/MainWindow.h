@@ -237,30 +237,6 @@ private:
         headerLayout->addWidget(newChatBtn);
         
         layout->addWidget(header);
-        
-        // Tabs (All Chats, Projects, Important)
-        QWidget* tabs = new QWidget(sidebar);
-        tabs->setFixedHeight(48);
-        tabs->setStyleSheet("background:" + StyleHelper::white() + "; border-bottom:1px solid " + StyleHelper::borderGray() + ";");
-        
-        QHBoxLayout* tabsLayout = new QHBoxLayout(tabs);
-        tabsLayout->setContentsMargins(16, 0, 16, 0);
-        tabsLayout->setSpacing(24);
-        
-        m_allChatsTab = createTab("All Chats", true);
-        m_projectsTab = createTab("Projects", false);
-        m_importantTab = createTab("Important", false);
-        
-        connect(m_allChatsTab, &QPushButton::clicked, [this]() { switchTab(0); });
-        connect(m_projectsTab, &QPushButton::clicked, [this]() { switchTab(1); });
-        connect(m_importantTab, &QPushButton::clicked, [this]() { switchTab(2); });
-        
-        tabsLayout->addWidget(m_allChatsTab);
-        tabsLayout->addWidget(m_projectsTab);
-        tabsLayout->addWidget(m_importantTab);
-        tabsLayout->addStretch();
-        
-        layout->addWidget(tabs);
 
         // Erreurs backend (évite l'impression de "liste vide" / "mock")
         m_errorBanner = new QLabel(sidebar);
@@ -396,40 +372,6 @@ private:
         l->addWidget(label);
         l->addStretch();
         return header;
-    }
-    
-    QPushButton* createTab(const QString& text, bool active) {
-        QPushButton* tab = new QPushButton(text);
-        tab->setCursor(Qt::PointingHandCursor);
-        tab->setFixedHeight(48);
-        
-        if (active) {
-            tab->setStyleSheet(
-                "QPushButton {"
-                "  background:transparent;"
-                "  border:none;"
-                "  border-bottom:2px solid " + StyleHelper::primaryRed() + ";"
-                "  color:" + StyleHelper::black() + ";"
-                "  font-size:14px;"
-                "  font-weight:500;"
-                "  padding:0 4px;"
-                "}"
-            );
-        } else {
-            tab->setStyleSheet(
-                "QPushButton {"
-                "  background:transparent;"
-                "  border:none;"
-                "  color:" + StyleHelper::textLight() + ";"
-                "  font-size:14px;"
-                "  padding:0 4px;"
-                "}"
-                "QPushButton:hover {"
-                "  color:" + StyleHelper::darkGray() + ";"
-                "}"
-            );
-        }
-        return tab;
     }
     
     
@@ -996,26 +938,6 @@ private:
         updateConversationsList();
     }
     
-    void switchTab(int tabIndex) {
-        // Mettre à jour les styles des onglets
-        QString activeStyle = 
-            "QPushButton { background:transparent; color:" + StyleHelper::primaryRed() + "; font-weight:600; padding:8px 16px; border:none; border-bottom:2px solid " + StyleHelper::primaryRed() + "; }"
-            "QPushButton:hover { background:" + StyleHelper::lightGray() + "; }";
-        
-        QString inactiveStyle = 
-            "QPushButton { background:transparent; color:" + StyleHelper::textLight() + "; font-weight:500; padding:8px 16px; border:none; border-bottom:2px solid transparent; }"
-            "QPushButton:hover { background:" + StyleHelper::lightGray() + "; }";
-        
-        m_allChatsTab->setStyleSheet(tabIndex == 0 ? activeStyle : inactiveStyle);
-        m_projectsTab->setStyleSheet(tabIndex == 1 ? activeStyle : inactiveStyle);
-        m_importantTab->setStyleSheet(tabIndex == 2 ? activeStyle : inactiveStyle);
-        
-        m_currentTab = tabIndex;
-        
-        // Mettre à jour la liste (on peut filtrer par catégorie plus tard)
-        updateConversationsList();
-    }
-    
     // Handlers pour les boutons
     void onMenuClicked() {
         m_sidebarVisible = !m_sidebarVisible;
@@ -1211,12 +1133,8 @@ private:
     QLineEdit* m_searchBox;
     QLineEdit* m_messageInput;
     QVBoxLayout* m_conversationsLayout;
-    QPushButton* m_allChatsTab;
-    QPushButton* m_projectsTab;
-    QPushButton* m_importantTab;
     QPushButton* m_sendBtn;
     int m_selectedConversation = -1;
-    int m_currentTab = 0;
     bool m_sidebarVisible = true;
     
 signals:
