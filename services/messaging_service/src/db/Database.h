@@ -15,6 +15,13 @@ struct DbMessageRow {
     long long created_at_unix = 0;
 };
 
+struct DbConversationRow {
+    int id_conversations = 0;
+    std::string title;
+    std::string type;
+    long long last_timestamp_unix = 0;
+};
+
 class Database {
 public:
     explicit Database(std::string connStr);
@@ -26,6 +33,13 @@ public:
                       const std::string& encryptedContentB64);
 
     std::vector<DbMessageRow> getHistory(const std::string& conversationKey, int limit);
+
+    int createGroupConversation(const std::string& title);
+    bool addParticipant(int conversationId, int userId);
+    bool isParticipant(int conversationId, int userId);
+    std::vector<DbConversationRow> listConversationsForUser(int userId, int limit);
+
+    bool deleteConversationById(int conversationId);
 
 private:
     void ensureConnectedLocked();

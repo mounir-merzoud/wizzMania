@@ -67,3 +67,24 @@ message RegisterHttpRequest {
   string password = 3;
   string role_name = 4;
 }
+
+// --- Rooms (salons) ---
+message CreateRoomHttpRequest {
+  string title = 1;
+  repeated string participant_emails = 2;
+}
+
+message CreateRoomHttpResponse {
+  bool success = 1;
+  string message = 2;
+  string room_id = 3;
+}
+
+message RoomSummary {
+  string room_id = 1;
+  string title = 2;
+}
+
+message ListRoomsResponse {
+  repeated RoomSummary rooms = 1;
+}

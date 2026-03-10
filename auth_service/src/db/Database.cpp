@@ -5,6 +5,7 @@ Database::Database(const std::string& connStr)
     : connStr_(connStr), conn(connStr) {}
 
 void Database::ensureConnection() {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (!conn.is_open()) {
         std::cerr << "[Database] Connection closed. Attempting reconnect..." << std::endl;
         conn = pqxx::connection(connStr_);
@@ -17,6 +18,7 @@ void Database::ensureConnection() {
 }
 
 bool Database::userExists(const std::string& email) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     ensureConnection();
     try {
         pqxx::work txn(conn);
@@ -37,6 +39,7 @@ bool Database::userExists(const std::string& email) {
 }
 
 void Database::registerUser(const std::string& fullName, const std::string& email, const std::string& hashedPassword) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     ensureConnection();
     try {
         pqxx::work txn(conn);
@@ -58,6 +61,7 @@ void Database::registerUser(const std::string& fullName, const std::string& emai
 }
 
 void Database::registerUserWithRole(const std::string& fullName, const std::string& email, const std::string& hashedPassword, const std::string& roleName) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     ensureConnection();
     try {
         pqxx::work txn(conn);
@@ -124,6 +128,7 @@ void Database::registerUserWithRole(const std::string& fullName, const std::stri
 }
 
 std::optional<UserRecord> Database::getUserByEmail(const std::string& email) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     ensureConnection();
     try {
         pqxx::work txn(conn);
@@ -164,7 +169,251 @@ std::optional<UserRecord> Database::getUserByEmail(const std::string& email) {
     }
 }
 
+std::optional<UserRecord> Database::getUserById(int user_id) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    ensureConnection();
+    try {
+        pqxx::work txn(conn);
+        pqxx::result r = txn.exec_params(
+            "SELECT u.id_users, u.email, u.password_hash, u.full_name, u.role_id, r.name as role_name "
+            "FROM users u LEFT JOIN roles r ON u.role_id = r.id_roles WHERE u.id_users = $1",
+            user_id);
+
+        if (r.empty()) return std::nullopt;
+
+        UserRecord user{
+            r[0]["id_users"].as<int>(),
+            r[0]["email"].as<std::string>(),
+            r[0]["password_hash"].as<std::string>(),
+            r[0]["full_name"].as<std::string>(),
+            r[0]["role_id"].is_null() ? 0 : r[0]["role_id"].as<int>(),
+            r[0]["role_name"].is_null() ? "" : r[0]["role_name"].as<std::string>()
+        };
+        return user;
+    } catch (const pqxx::broken_connection& bc) {
+        std::cerr << "[Database] broken_connection in getUserById: " << bc.what() << std::endl;
+        ensureConnection();
+        pqxx::work retryTxn(conn);
+        pqxx::result r = retryTxn.exec_params(
+            "SELECT u.id_users, u.email, u.password_hash, u.full_name, u.role_id, r.name as role_name "
+            "FROM users u LEFT JOIN roles r ON u.role_id = r.id_roles WHERE u.id_users = $1",
+            user_id);
+        if (r.empty()) return std::nullopt;
+        UserRecord user{
+            r[0]["id_users"].as<int>(),
+            r[0]["email"].as<std::string>(),
+            r[0]["password_hash"].as<std::string>(),
+            r[0]["full_name"].as<std::string>(),
+            r[0]["role_id"].is_null() ? 0 : r[0]["role_id"].as<int>(),
+            r[0]["role_name"].is_null() ? "" : r[0]["role_name"].as<std::string>()
+        };
+        return user;
+    }
+}
+
+bool Database::deleteUserById(int user_id) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    ensureConnection();
+    try {
+        pqxx::work txn(conn);
+
+        // Revoke current jti (if any) so existing tokens become invalid.
+        pqxx::result jti_r = txn.exec_params(
+            "SELECT token_jti FROM users WHERE id_users = $1",
+            user_id);
+        if (!jti_r.empty() && !jti_r[0]["token_jti"].is_null()) {
+            const std::string jti = jti_r[0]["token_jti"].as<std::string>();
+            if (!jti.empty()) {
+                txn.exec_params(
+                    "INSERT INTO tokens_revoked (token_jti) VALUES ($1) ON CONFLICT (token_jti) DO NOTHING",
+                    jti);
+            }
+        }
+
+        pqxx::result r = txn.exec_params(
+            "DELETE FROM users WHERE id_users = $1",
+            user_id);
+        txn.commit();
+
+        return r.affected_rows() > 0;
+    } catch (const pqxx::broken_connection& bc) {
+        std::cerr << "[Database] broken_connection in deleteUserById: " << bc.what() << std::endl;
+        ensureConnection();
+
+        pqxx::work retryTxn(conn);
+        pqxx::result jti_r = retryTxn.exec_params(
+            "SELECT token_jti FROM users WHERE id_users = $1",
+            user_id);
+        if (!jti_r.empty() && !jti_r[0]["token_jti"].is_null()) {
+            const std::string jti = jti_r[0]["token_jti"].as<std::string>();
+            if (!jti.empty()) {
+                retryTxn.exec_params(
+                    "INSERT INTO tokens_revoked (token_jti) VALUES ($1) ON CONFLICT (token_jti) DO NOTHING",
+                    jti);
+            }
+        }
+
+        pqxx::result r = retryTxn.exec_params(
+            "DELETE FROM users WHERE id_users = $1",
+            user_id);
+        retryTxn.commit();
+        return r.affected_rows() > 0;
+    }
+}
+
+bool Database::updateUserPasswordHash(int user_id, const std::string& new_hashed_password) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    ensureConnection();
+    try {
+        pqxx::work txn(conn);
+        txn.exec_params(
+            "UPDATE users SET password_hash = $1 WHERE id_users = $2",
+            new_hashed_password, user_id);
+        txn.commit();
+        return true;
+    } catch (const pqxx::broken_connection& bc) {
+        std::cerr << "[Database] broken_connection in updateUserPasswordHash: " << bc.what() << std::endl;
+        ensureConnection();
+        try {
+            pqxx::work retryTxn(conn);
+            retryTxn.exec_params(
+                "UPDATE users SET password_hash = $1 WHERE id_users = $2",
+                new_hashed_password, user_id);
+            retryTxn.commit();
+            return true;
+        } catch (const std::exception& e) {
+            std::cerr << "[Database] Error updating password hash: " << e.what() << std::endl;
+            return false;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "[Database] Error updating password hash: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+std::optional<std::string> Database::getUserTokenJti(int user_id) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    ensureConnection();
+    try {
+        pqxx::work txn(conn);
+        pqxx::result r = txn.exec_params(
+            "SELECT token_jti FROM users WHERE id_users = $1",
+            user_id);
+        if (r.empty() || r[0]["token_jti"].is_null()) {
+            return std::nullopt;
+        }
+        return r[0]["token_jti"].as<std::string>();
+    } catch (const pqxx::broken_connection& bc) {
+        std::cerr << "[Database] broken_connection in getUserTokenJti: " << bc.what() << std::endl;
+        ensureConnection();
+        pqxx::work retryTxn(conn);
+        pqxx::result r = retryTxn.exec_params(
+            "SELECT token_jti FROM users WHERE id_users = $1",
+            user_id);
+        if (r.empty() || r[0]["token_jti"].is_null()) {
+            return std::nullopt;
+        }
+        return r[0]["token_jti"].as<std::string>();
+    }
+}
+
+bool Database::setUserTokenJti(int user_id, const std::string& token_jti) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    ensureConnection();
+    try {
+        pqxx::work txn(conn);
+        if (token_jti.empty()) {
+            txn.exec_params(
+                "UPDATE users SET token_jti = NULL WHERE id_users = $1",
+                user_id);
+        } else {
+            txn.exec_params(
+                "UPDATE users SET token_jti = $1 WHERE id_users = $2",
+                token_jti,
+                user_id);
+        }
+        txn.commit();
+        return true;
+    } catch (const pqxx::broken_connection& bc) {
+        std::cerr << "[Database] broken_connection in setUserTokenJti: " << bc.what() << std::endl;
+        ensureConnection();
+        try {
+            pqxx::work retryTxn(conn);
+            if (token_jti.empty()) {
+                retryTxn.exec_params(
+                    "UPDATE users SET token_jti = NULL WHERE id_users = $1",
+                    user_id);
+            } else {
+                retryTxn.exec_params(
+                    "UPDATE users SET token_jti = $1 WHERE id_users = $2",
+                    token_jti,
+                    user_id);
+            }
+            retryTxn.commit();
+            return true;
+        } catch (const std::exception& e) {
+            std::cerr << "[Database] Error in setUserTokenJti retry: " << e.what() << std::endl;
+            return false;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "[Database] Error in setUserTokenJti: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool Database::isTokenRevoked(const std::string& token_jti) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (token_jti.empty()) return false;
+    ensureConnection();
+    try {
+        pqxx::work txn(conn);
+        pqxx::result r = txn.exec_params(
+            "SELECT token_jti FROM tokens_revoked WHERE token_jti = $1",
+            token_jti);
+        return !r.empty();
+    } catch (const pqxx::broken_connection& bc) {
+        std::cerr << "[Database] broken_connection in isTokenRevoked: " << bc.what() << std::endl;
+        ensureConnection();
+        pqxx::work retryTxn(conn);
+        pqxx::result r = retryTxn.exec_params(
+            "SELECT token_jti FROM tokens_revoked WHERE token_jti = $1",
+            token_jti);
+        return !r.empty();
+    } catch (const std::exception& e) {
+        std::cerr << "[Database] Error in isTokenRevoked: " << e.what() << std::endl;
+        // Fail open would be unsafe; treat as revoked when DB errors.
+        return true;
+    }
+}
+
+bool Database::revokeTokenJti(const std::string& token_jti) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (token_jti.empty()) return true;
+    ensureConnection();
+    try {
+        pqxx::work txn(conn);
+        txn.exec_params(
+            "INSERT INTO tokens_revoked (token_jti) VALUES ($1) ON CONFLICT (token_jti) DO NOTHING",
+            token_jti);
+        txn.commit();
+        return true;
+    } catch (const pqxx::broken_connection& bc) {
+        std::cerr << "[Database] broken_connection in revokeTokenJti: " << bc.what() << std::endl;
+        ensureConnection();
+        pqxx::work retryTxn(conn);
+        retryTxn.exec_params(
+            "INSERT INTO tokens_revoked (token_jti) VALUES ($1) ON CONFLICT (token_jti) DO NOTHING",
+            token_jti);
+        retryTxn.commit();
+        return true;
+    } catch (const std::exception& e) {
+        std::cerr << "[Database] Error in revokeTokenJti: " << e.what() << std::endl;
+        return false;
+    }
+}
+
 std::vector<UserRecord> Database::listUsers() {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     ensureConnection();
     std::vector<UserRecord> users;
     try {
@@ -194,6 +443,7 @@ std::vector<UserRecord> Database::listUsers() {
 
 // RBAC Methods Implementation
 std::vector<std::string> Database::getUserPermissions(int user_id) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     ensureConnection();
     std::vector<std::string> permissions;
     try {
@@ -216,6 +466,7 @@ std::vector<std::string> Database::getUserPermissions(int user_id) {
 }
 
 bool Database::isUserAdmin(const std::string& email) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     ensureConnection();
     try {
         pqxx::work txn(conn);
@@ -236,6 +487,7 @@ bool Database::isUserAdmin(const std::string& email) {
 }
 
 bool Database::assignRoleToUser(int user_id, int role_id) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     ensureConnection();
     try {
         pqxx::work txn(conn);
@@ -249,6 +501,7 @@ bool Database::assignRoleToUser(int user_id, int role_id) {
 }
 
 RoleRecord Database::getRole(int role_id) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     ensureConnection();
     try {
         pqxx::work txn(conn);
@@ -281,12 +534,29 @@ RoleRecord Database::getRole(int role_id) {
     return RoleRecord{0, "", "", {}};
 }
 
+std::optional<int> Database::getRoleIdByName(const std::string& role_name) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    ensureConnection();
+    try {
+        pqxx::work txn(conn);
+        pqxx::result r = txn.exec_params(
+            "SELECT id_roles FROM roles WHERE name = $1",
+            role_name);
+        if (r.empty()) return std::nullopt;
+        return r[0]["id_roles"].as<int>();
+    } catch (const std::exception& e) {
+        std::cerr << "[Database] Error getting role id by name: " << e.what() << std::endl;
+        return std::nullopt;
+    }
+}
+
 bool Database::createRole(const std::string& name, const std::string& description) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     ensureConnection();
     try {
         pqxx::work txn(conn);
         txn.exec_params(
-            "INSERT INTO roles (name, description) VALUES ($1, $2)", 
+            "INSERT INTO roles (name, description) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING",
             name, description);
         txn.commit();
         return true;
@@ -297,6 +567,7 @@ bool Database::createRole(const std::string& name, const std::string& descriptio
 }
 
 std::vector<RoleRecord> Database::listRoles() {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     ensureConnection();
     std::vector<RoleRecord> roles;
     try {
@@ -330,6 +601,7 @@ std::vector<RoleRecord> Database::listRoles() {
 }
 
 bool Database::addPermissionToRole(int role_id, const std::string& permission) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     ensureConnection();
     try {
         pqxx::work txn(conn);
@@ -340,8 +612,17 @@ bool Database::addPermissionToRole(int role_id, const std::string& permission) {
             permission);
         
         if (perm_r.empty()) {
-            std::cerr << "[Database] Permission not found: " << permission << std::endl;
-            return false;
+            // Create permission if it does not exist yet.
+            txn.exec_params(
+                "INSERT INTO permissions (name, description) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING",
+                permission, "");
+            perm_r = txn.exec_params(
+                "SELECT id_permissions FROM permissions WHERE name = $1",
+                permission);
+            if (perm_r.empty()) {
+                std::cerr << "[Database] Permission not found and could not be created: " << permission << std::endl;
+                return false;
+            }
         }
         
         int permission_id = perm_r[0]["id_permissions"].as<int>();

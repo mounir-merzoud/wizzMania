@@ -116,6 +116,15 @@ std::string dm_conversation_key(const std::string& userA, const std::string& use
     if (userA <= userB) return "dm:" + userA + ":" + userB;
     return "dm:" + userB + ":" + userA;
 }
+
+bool is_room_id(const std::string& s) {
+    return s.rfind("room:", 0) == 0;
+}
+
+bool is_numeric_id(const std::string& s) {
+    long long tmp = 0;
+    return try_parse_int64(s, &tmp);
+}
 }
 
 int main(int /*argc*/, char** /*argv*/) {
@@ -184,6 +193,49 @@ int main(int /*argc*/, char** /*argv*/) {
         set_proto_json(res, 200, out);
     });
 
+    // DELETE /users/:id (admin only)
+    server.Delete(R"(/users/(\d+))", [&](const httplib::Request& req, httplib::Response& res) {
+        securecloud::auth::ValidateTokenResponse vresp;
+        std::string err;
+        if (!validate_access_token(*authStub, req, &vresp, &err)) {
+            set_json(res, 401, json_error(err));
+            return;
+        }
+        if (vresp.role() != "admin") {
+            set_json(res, 403, json_error("Admin required"));
+            return;
+        }
+
+        const std::string userId = (req.matches.size() >= 2) ? req.matches[1].str() : std::string();
+        if (userId.empty()) {
+            set_json(res, 400, json_error("Missing user id"));
+            return;
+        }
+
+        securecloud::auth::DeleteUserRequest dreq;
+        dreq.set_admin_token(get_bearer_token(req));
+        dreq.set_user_id(userId);
+
+        grpc::ClientContext ctx;
+        securecloud::auth::DeleteUserResponse dresp;
+        auto st = authStub->DeleteUser(&ctx, dreq, &dresp);
+        if (!st.ok()) {
+            int status = 502;
+            if (st.error_code() == grpc::StatusCode::INVALID_ARGUMENT) status = 400;
+            else if (st.error_code() == grpc::StatusCode::NOT_FOUND) status = 404;
+            else if (st.error_code() == grpc::StatusCode::PERMISSION_DENIED) status = 403;
+            else if (st.error_code() == grpc::StatusCode::UNAUTHENTICATED) status = 401;
+            std::string msg = st.error_message();
+            if (msg.empty()) {
+                msg = "gRPC DeleteUser failed (code=" + std::to_string(static_cast<int>(st.error_code())) + ")";
+            }
+            set_json(res, status, json_error(msg));
+            return;
+        }
+
+        set_proto_json(res, 200, dresp);
+    });
+
     // POST /login
     // Body JSON: {"username":"...","password":"..."}
     // Response JSON: auth_service LoginResponse (tokens, expires)
@@ -208,12 +260,94 @@ int main(int /*argc*/, char** /*argv*/) {
         auto callStatus = authStub->Login(&authCtx, authReq, &authResp);
 
         if (!callStatus.ok()) {
-            // Auth refused or service error
-            set_json(res, 401, json_error(callStatus.error_message()));
+            const auto code = callStatus.error_code();
+            const std::string msg = callStatus.error_message().empty()
+                                        ? ("gRPC Login failed (code=" + std::to_string(static_cast<int>(code)) + ")")
+                                        : callStatus.error_message();
+
+            // Map common gRPC codes to HTTP semantics.
+            int http = 502;
+            if (code == grpc::StatusCode::INVALID_ARGUMENT) http = 400;
+            else if (code == grpc::StatusCode::NOT_FOUND) http = 404;
+            else if (code == grpc::StatusCode::UNAUTHENTICATED) http = 401;
+            else if (code == grpc::StatusCode::PERMISSION_DENIED) http = 403;
+            else if (code == grpc::StatusCode::UNAVAILABLE || code == grpc::StatusCode::DEADLINE_EXCEEDED) http = 502;
+
+            set_json(res, http, json_error(msg));
             return;
         }
 
         set_proto_json(res, 200, authResp);
+    });
+
+    // POST /refresh
+    // Body JSON: {"refreshToken":"..."}
+    // Response JSON: auth_service RefreshTokenResponse
+    server.Post("/refresh", [&](const httplib::Request& req, httplib::Response& res) {
+        if (req.body.empty()) {
+            set_json(res, 400, json_error("Empty request body"));
+            return;
+        }
+
+        securecloud::auth::RefreshTokenRequest rreq;
+        JsonParseOptions parseOpts;
+        parseOpts.ignore_unknown_fields = true;
+        auto parseStatus = JsonStringToMessage(req.body, &rreq, parseOpts);
+        if (!parseStatus.ok()) {
+            set_json(res, 400, json_error("Invalid JSON payload"));
+            return;
+        }
+
+        grpc::ClientContext ctx;
+        securecloud::auth::RefreshTokenResponse rresp;
+        auto st = authStub->RefreshToken(&ctx, rreq, &rresp);
+        if (!st.ok()) {
+            const int status = (st.error_code() == grpc::StatusCode::UNAUTHENTICATED) ? 401 : 502;
+            std::string msg = st.error_message();
+            if (msg.empty()) {
+                msg = "gRPC RefreshToken failed (code=" + std::to_string(static_cast<int>(st.error_code())) + ")";
+            }
+            set_json(res, status, json_error(msg));
+            return;
+        }
+
+        set_proto_json(res, 200, rresp);
+    });
+
+    // POST /logout
+    // Authorization: Bearer <access_token>
+    // Revokes tokens for current user.
+    server.Post("/logout", [&](const httplib::Request& req, httplib::Response& res) {
+        securecloud::auth::ValidateTokenResponse vresp;
+        std::string err;
+        if (!validate_access_token(*authStub, req, &vresp, &err)) {
+            set_json(res, 401, json_error(err));
+            return;
+        }
+
+        securecloud::auth::RevokeTokensRequest rreq;
+        rreq.set_user_id(vresp.user_id());
+
+        grpc::ClientContext ctx;
+        // Defense-in-depth: let auth_service also validate the caller.
+        const std::string bearer = get_bearer_token(req);
+        if (!bearer.empty()) {
+            ctx.AddMetadata("authorization", "Bearer " + bearer);
+        }
+
+        securecloud::auth::RevokeTokensResponse rresp;
+        auto st = authStub->RevokeTokens(&ctx, rreq, &rresp);
+        if (!st.ok()) {
+            const int status = (st.error_code() == grpc::StatusCode::PERMISSION_DENIED) ? 403 : 502;
+            std::string msg = st.error_message();
+            if (msg.empty()) {
+                msg = "gRPC RevokeTokens failed (code=" + std::to_string(static_cast<int>(st.error_code())) + ")";
+            }
+            set_json(res, status, json_error(msg));
+            return;
+        }
+
+        set_json(res, 200, "{\"success\":true}");
     });
 
     // POST /register (admin only)
@@ -332,9 +466,11 @@ int main(int /*argc*/, char** /*argv*/) {
 
         std::string conversationKey = conversationId;
 
+        bool hasValidatedAuth = false;
+        securecloud::auth::ValidateTokenResponse vresp;
+
         // optional auth
         if (req.has_header("Authorization")) {
-            securecloud::auth::ValidateTokenResponse vresp;
             std::string err;
             if (!validate_access_token(*authStub, req, &vresp, &err)) {
                 res.status = 401;
@@ -342,8 +478,13 @@ int main(int /*argc*/, char** /*argv*/) {
                 return;
             }
 
-            // Map UI contact-id-style paths into a stable per-pair conversation key.
-            conversationKey = dm_conversation_key(vresp.user_id(), conversationId);
+            hasValidatedAuth = true;
+
+            // Map UI contact-id-style paths (numeric user id) into a stable per-pair DM key.
+            // For rooms (room:<id>), keep as-is.
+            if (!is_room_id(conversationId) && is_numeric_id(conversationId)) {
+                conversationKey = dm_conversation_key(vresp.user_id(), conversationId);
+            }
         }
 
         int limit = 50;
@@ -358,8 +499,13 @@ int main(int /*argc*/, char** /*argv*/) {
         securecloud::messaging::HistoryRequest hreq;
         hreq.set_conversation_id(conversationKey);
         hreq.set_limit(limit);
+        if (hasValidatedAuth) {
+            // Provide requester_id for room membership checks.
+            hreq.set_requester_id(vresp.user_id());
+        }
         securecloud::messaging::HistoryResponse hresp;
         grpc::ClientContext ctx;
+
         auto st = messagingStub->GetHistory(&ctx, hreq, &hresp);
         if (!st.ok()) {
             res.status = 502;
@@ -433,7 +579,11 @@ int main(int /*argc*/, char** /*argv*/) {
         }
 
         securecloud::messaging::EncryptedMessage msg;
-        msg.set_conversation_id(dm_conversation_key(vresp.user_id(), conversationId));
+        if (!is_room_id(conversationId) && is_numeric_id(conversationId)) {
+            msg.set_conversation_id(dm_conversation_key(vresp.user_id(), conversationId));
+        } else {
+            msg.set_conversation_id(conversationId);
+        }
         msg.set_sender_id(vresp.user_id());
         msg.set_ciphertext(in.content());
         msg.set_timestamp_unix(std::time(nullptr));
@@ -463,6 +613,168 @@ int main(int /*argc*/, char** /*argv*/) {
 
         res.status = 200;
         res.set_content(json, "application/json");
+    });
+
+    // GET /rooms (Authorization: Bearer <token>)
+    server.Get("/rooms", [&](const httplib::Request& req, httplib::Response& res) {
+        securecloud::auth::ValidateTokenResponse vresp;
+        std::string err;
+        if (!validate_access_token(*authStub, req, &vresp, &err)) {
+            set_json(res, 401, json_error(err));
+            return;
+        }
+
+        securecloud::messaging::ListConversationsRequest lreq;
+        lreq.set_user_id(vresp.user_id());
+        lreq.set_limit(200);
+        securecloud::messaging::ListConversationsResponse lresp;
+        grpc::ClientContext ctx;
+        auto st = messagingStub->ListConversations(&ctx, lreq, &lresp);
+        if (!st.ok()) {
+            std::string msg = st.error_message();
+            if (msg.empty()) {
+                msg = "gRPC ListConversations failed (code=" + std::to_string(static_cast<int>(st.error_code())) + ")";
+            }
+            set_json(res, 502, json_error(msg));
+            return;
+        }
+
+        securecloud::gateway::ListRoomsResponse out;
+        for (const auto& c : lresp.conversations()) {
+            if (c.type() != "group") continue;
+            auto* r = out.add_rooms();
+            r->set_room_id(c.conversation_id());
+            r->set_title(c.title());
+        }
+
+        set_proto_json(res, 200, out);
+    });
+
+    // POST /rooms (admin only)
+    // Body JSON: {"title":"...","participantEmails":["a@x","b@y"]}
+    server.Post("/rooms", [&](const httplib::Request& req, httplib::Response& res) {
+        securecloud::auth::ValidateTokenResponse vresp;
+        std::string err;
+        if (!validate_access_token(*authStub, req, &vresp, &err)) {
+            set_json(res, 401, json_error(err));
+            return;
+        }
+        if (vresp.role() != "admin") {
+            set_json(res, 403, json_error("Admin required"));
+            return;
+        }
+        if (req.body.empty()) {
+            set_json(res, 400, json_error("Empty request body"));
+            return;
+        }
+
+        securecloud::gateway::CreateRoomHttpRequest in;
+        JsonParseOptions parseOpts;
+        parseOpts.ignore_unknown_fields = true;
+        auto parseStatus = JsonStringToMessage(req.body, &in, parseOpts);
+        if (!parseStatus.ok()) {
+            set_json(res, 400, json_error("Invalid JSON payload"));
+            return;
+        }
+        if (in.title().empty()) {
+            set_json(res, 400, json_error("Missing title"));
+            return;
+        }
+
+        // Build email -> user_id mapping via auth ListUsers
+        securecloud::auth::ListUsersRequest ureq;
+        ureq.set_access_token(get_bearer_token(req));
+        ureq.set_include_self(true);
+        securecloud::auth::ListUsersResponse uresp;
+        grpc::ClientContext uctx;
+        auto ust = authStub->ListUsers(&uctx, ureq, &uresp);
+        if (!ust.ok()) {
+            set_json(res, 502, json_error(ust.error_message()));
+            return;
+        }
+        std::unordered_map<std::string, std::string> emailToId;
+        emailToId.reserve(static_cast<size_t>(uresp.users_size()));
+        for (const auto& u : uresp.users()) {
+            if (!u.email().empty() && !u.user_id().empty()) {
+                emailToId.emplace(u.email(), u.user_id());
+            }
+        }
+
+        securecloud::messaging::CreateConversationRequest creq;
+        creq.set_creator_id(vresp.user_id());
+        creq.set_title(in.title());
+
+        for (const auto& mail : in.participant_emails()) {
+            const auto it = emailToId.find(mail);
+            if (it == emailToId.end()) {
+                set_json(res, 400, json_error("Unknown participant email: " + mail));
+                return;
+            }
+            creq.add_participant_ids(it->second);
+        }
+
+        securecloud::messaging::CreateConversationResponse cresp;
+        grpc::ClientContext cctx;
+        auto cst = messagingStub->CreateConversation(&cctx, creq, &cresp);
+        if (!cst.ok()) {
+            std::string msg = cst.error_message();
+            if (msg.empty()) {
+                msg = "gRPC CreateConversation failed (code=" + std::to_string(static_cast<int>(cst.error_code())) + ")";
+            }
+            // If the server is running an old binary that doesn't implement rooms yet.
+            if (cst.error_code() == grpc::StatusCode::UNIMPLEMENTED) {
+                msg += ". messaging_service likely needs rebuild/restart.";
+            }
+            set_json(res, 502, json_error(msg));
+            return;
+        }
+
+        securecloud::gateway::CreateRoomHttpResponse out;
+        out.set_success(cresp.success());
+        out.set_message(cresp.message());
+        out.set_room_id(cresp.conversation_id());
+        set_proto_json(res, 200, out);
+    });
+
+    // DELETE /rooms/:roomId (admin only)
+    server.Delete(R"(/rooms/([^/]+))", [&](const httplib::Request& req, httplib::Response& res) {
+        securecloud::auth::ValidateTokenResponse vresp;
+        std::string err;
+        if (!validate_access_token(*authStub, req, &vresp, &err)) {
+            set_json(res, 401, json_error(err));
+            return;
+        }
+        if (vresp.role() != "admin") {
+            set_json(res, 403, json_error("Admin required"));
+            return;
+        }
+
+        const std::string roomId = (req.matches.size() >= 2) ? req.matches[1].str() : std::string();
+        if (roomId.empty() || !is_room_id(roomId)) {
+            set_json(res, 400, json_error("Invalid room id"));
+            return;
+        }
+
+        securecloud::messaging::DeleteConversationRequest dreq;
+        dreq.set_conversation_id(roomId);
+        securecloud::messaging::DeleteConversationResponse dresp;
+
+        grpc::ClientContext ctx;
+        auto st = messagingStub->DeleteConversation(&ctx, dreq, &dresp);
+        if (!st.ok()) {
+            int status = 502;
+            if (st.error_code() == grpc::StatusCode::INVALID_ARGUMENT) status = 400;
+            else if (st.error_code() == grpc::StatusCode::NOT_FOUND) status = 404;
+            else if (st.error_code() == grpc::StatusCode::PERMISSION_DENIED) status = 403;
+            std::string msg = st.error_message();
+            if (msg.empty()) {
+                msg = "gRPC DeleteConversation failed (code=" + std::to_string(static_cast<int>(st.error_code())) + ")";
+            }
+            set_json(res, status, json_error(msg));
+            return;
+        }
+
+        set_proto_json(res, 200, dresp);
     });
 
     std::cout << "HTTP Gateway listening on http://" << http_listen_host << ":" << http_port << "\n";

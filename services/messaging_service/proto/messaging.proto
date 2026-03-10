@@ -18,6 +18,8 @@ message SendAck {
 message HistoryRequest {
   string conversation_id = 1;
   int32 limit = 2;
+  // Optional: used for access control (room membership) when provided.
+  string requester_id = 3;
 }
 
 message HistoryResponse {
@@ -31,4 +33,66 @@ service MessagingService {
   rpc GetHistory(HistoryRequest) returns (HistoryResponse);
   // Stream bidirectionnel temps réel
   rpc ChatStream(stream EncryptedMessage) returns (stream EncryptedMessage);
+
+  // --- Salons / conversations ---
+  rpc CreateConversation(CreateConversationRequest) returns (CreateConversationResponse);
+  rpc AddParticipants(AddParticipantsRequest) returns (AddParticipantsResponse);
+  rpc ListConversations(ListConversationsRequest) returns (ListConversationsResponse);
+
+  // Admin via gateway: delete a room (room:<id>)
+  rpc DeleteConversation(DeleteConversationRequest) returns (DeleteConversationResponse);
+}
+
+message CreateConversationRequest {
+  // User id of the creator (stringified int)
+  string creator_id = 1;
+  string title = 2;
+  // Participants to add (stringified ints). The creator will be added automatically.
+  repeated string participant_ids = 3;
+}
+
+message CreateConversationResponse {
+  bool success = 1;
+  string message = 2;
+  // For rooms, uses format: room:<id_conversations>
+  string conversation_id = 3;
+}
+
+message AddParticipantsRequest {
+  // room:<id_conversations>
+  string conversation_id = 1;
+  repeated string participant_ids = 2;
+}
+
+message AddParticipantsResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListConversationsRequest {
+  // stringified int user id
+  string user_id = 1;
+  // optional: max conversations (0 => default)
+  int32 limit = 2;
+}
+
+message ConversationSummary {
+  string conversation_id = 1; // room:<id>
+  string title = 2;
+  string type = 3;
+  int64 last_timestamp_unix = 4;
+}
+
+message ListConversationsResponse {
+  repeated ConversationSummary conversations = 1;
+}
+
+message DeleteConversationRequest {
+  // For rooms: room:<id_conversations>
+  string conversation_id = 1;
+}
+
+message DeleteConversationResponse {
+  bool success = 1;
+  string message = 2;
 }

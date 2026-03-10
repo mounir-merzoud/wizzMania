@@ -38,6 +38,14 @@ public:
                        const securecloud::auth::RefreshTokenRequest* request,
                        securecloud::auth::RefreshTokenResponse* response) override;
 
+    Status RevokeTokens(ServerContext* context,
+                       const securecloud::auth::RevokeTokensRequest* request,
+                       securecloud::auth::RevokeTokensResponse* response) override;
+
+    Status DeleteUser(ServerContext* context,
+                     const securecloud::auth::DeleteUserRequest* request,
+                     securecloud::auth::DeleteUserResponse* response) override;
+
     // Méthodes RBAC
     Status AssignRole(ServerContext* context,
                      const securecloud::auth::AssignRoleRequest* request,
