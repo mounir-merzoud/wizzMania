@@ -69,6 +69,13 @@ public:
         mainLayout->addWidget(m_sidebar);
         mainLayout->addWidget(m_messagesPanel, 1);
 
+        connect(&AuthService::instance(), &AuthService::userLoggedIn, this, [this](const User&) {
+            updateProfileHeader();
+        });
+        connect(&AuthService::instance(), &AuthService::userLoggedOut, this, [this]() {
+            clearProfileHeader();
+        });
+
         // Wire dynamique: contacts/messages viennent du backend via MessagingService
         connect(&MessagingService::instance(), &MessagingService::contactsUpdated, this, [this]() {
             rebuildConversationsFromContacts();
@@ -102,6 +109,8 @@ public:
         rebuildConversationsFromContacts();
         // Et déclencher un refresh réseau
         MessagingService::instance().refreshContacts();
+
+        updateProfileHeader();
     }
     
 private:
@@ -135,6 +144,59 @@ private:
         QVBoxLayout* layout = new QVBoxLayout(sidebar);
         layout->setContentsMargins(0, 0, 0, 0);
         layout->setSpacing(0);
+
+        // Zone profil (compte connecté)
+        QWidget* profile = new QWidget(sidebar);
+        profile->setFixedHeight(72);
+        profile->setStyleSheet("background:" + StyleHelper::white() + "; border-bottom:1px solid " + StyleHelper::borderGray() + ";");
+
+        QHBoxLayout* profileLayout = new QHBoxLayout(profile);
+        profileLayout->setContentsMargins(16, 0, 16, 0);
+        profileLayout->setSpacing(12);
+
+        m_profileAvatar = new QLabel(profile);
+        m_profileAvatar->setFixedSize(44, 44);
+        m_profileAvatar->setAlignment(Qt::AlignCenter);
+        m_profileAvatar->setStyleSheet(
+            "background:" + StyleHelper::primaryRed() + ";"
+            "color:white;"
+            "border-radius:22px;"
+            "font-size:14px;"
+            "font-weight:600;"
+        );
+
+        QWidget* profileText = new QWidget(profile);
+        QVBoxLayout* profileTextLayout = new QVBoxLayout(profileText);
+        profileTextLayout->setContentsMargins(0, 0, 0, 0);
+        profileTextLayout->setSpacing(2);
+
+        m_profileName = new QLabel(QStringLiteral("—"), profileText);
+        m_profileName->setStyleSheet("font-size:15px; font-weight:600; color:" + StyleHelper::black() + ";");
+
+        QLabel* profileHint = new QLabel(QStringLiteral("Compte"), profileText);
+        profileHint->setStyleSheet("font-size:12px; color:" + StyleHelper::textLight() + ";");
+
+        profileTextLayout->addWidget(m_profileName);
+        profileTextLayout->addWidget(profileHint);
+
+        m_profileRole = new QLabel(profile);
+        m_profileRole->setAlignment(Qt::AlignCenter);
+        m_profileRole->setStyleSheet(
+            "background:" + StyleHelper::lightGray() + ";"
+            "color:" + StyleHelper::darkGray() + ";"
+            "border:1px solid " + StyleHelper::borderGray() + ";"
+            "border-radius:10px;"
+            "padding:2px 10px;"
+            "font-size:11px;"
+            "font-weight:600;"
+        );
+        m_profileRole->hide();
+
+        profileLayout->addWidget(m_profileAvatar);
+        profileLayout->addWidget(profileText, 1);
+        profileLayout->addWidget(m_profileRole);
+
+        layout->addWidget(profile);
         
         // Header avec menu + search + new chat
         QWidget* header = new QWidget(sidebar);
@@ -246,31 +308,94 @@ private:
         
         // Ajouter les conversations filtrées
         QString searchText = m_searchBox ? m_searchBox->text().toLower() : "";
-        
+
+        // Index contacts pour récupérer role/status
+        QHash<QString, Contact> contactsById;
+        const QList<Contact> contacts = MessagingService::instance().getContacts();
+        contactsById.reserve(contacts.size());
+        for (const auto& c : contacts) {
+            const QString id = c.id().trimmed();
+            if (!id.isEmpty()) {
+                contactsById.insert(id, c);
+            }
+        }
+
+        QVector<int> roomIndices;
+        QVector<int> userIndices;
+        roomIndices.reserve(m_conversations.size());
+        userIndices.reserve(m_conversations.size());
         for (int i = 0; i < m_conversations.size(); ++i) {
             const auto& conv = m_conversations[i];
-
-            const QList<Message> msgs = MessagingService::instance().getMessages(conv.contactId);
-            const QString lastMessage = msgs.isEmpty() ? QStringLiteral("—") : msgs.last().content();
-            const QString timeStr = msgs.isEmpty() ? QString() : msgs.last().timestamp().toString("HH:mm");
-            
-            // Filtrer par recherche
-            if (!searchText.isEmpty()) {
-                if (!conv.contactName.toLower().contains(searchText) && 
-                    !lastMessage.toLower().contains(searchText)) {
-                    continue;
-                }
+            if (conv.contactId.startsWith(QStringLiteral("room:"))) {
+                roomIndices.push_back(i);
+            } else {
+                userIndices.push_back(i);
             }
-            
-            QWidget* row = createConversationRow(
-                conv.contactName, 
-                lastMessage, 
-                timeStr, 
-                conv.hasUnread,
-                i
-            );
-            m_conversationsLayout->insertWidget(m_conversationsLayout->count() - 1, row);
         }
+
+        auto addSection = [&](const QString& title, const QVector<int>& indices) {
+            bool headerAdded = false;
+            for (int i : indices) {
+                const auto& conv = m_conversations[i];
+
+                const QList<Message> msgs = MessagingService::instance().getMessages(conv.contactId);
+                const QString lastMessage = msgs.isEmpty() ? QStringLiteral("—") : msgs.last().content();
+                const QString timeStr = msgs.isEmpty() ? QString() : msgs.last().timestamp().toString("HH:mm");
+
+                // Filtrer par recherche
+                if (!searchText.isEmpty()) {
+                    if (!conv.contactName.toLower().contains(searchText) &&
+                        !lastMessage.toLower().contains(searchText)) {
+                        continue;
+                    }
+                }
+
+                QString meta;
+                if (conv.contactId.startsWith(QStringLiteral("room:"))) {
+                    meta = QStringLiteral("Salon");
+                } else {
+                    const auto it = contactsById.constFind(conv.contactId);
+                    if (it != contactsById.constEnd()) {
+                        meta = it->status().trimmed();
+                    }
+                }
+
+                if (!headerAdded) {
+                    QWidget* header = createSectionHeader(title);
+                    m_conversationsLayout->insertWidget(m_conversationsLayout->count() - 1, header);
+                    headerAdded = true;
+                }
+
+                QWidget* row = createConversationRow(
+                    conv.contactName,
+                    meta,
+                    lastMessage,
+                    timeStr,
+                    conv.hasUnread,
+                    i
+                );
+                m_conversationsLayout->insertWidget(m_conversationsLayout->count() - 1, row);
+            }
+        };
+
+        addSection(QStringLiteral("Salons"), roomIndices);
+        addSection(QStringLiteral("Utilisateurs"), userIndices);
+    }
+
+    QWidget* createSectionHeader(const QString& title) {
+        QWidget* header = new QWidget();
+        header->setFixedHeight(36);
+        header->setStyleSheet("background:" + StyleHelper::white() + ";");
+
+        QHBoxLayout* l = new QHBoxLayout(header);
+        l->setContentsMargins(20, 0, 20, 0);
+        l->setSpacing(8);
+
+        QLabel* label = new QLabel(title.toUpper(), header);
+        label->setStyleSheet("font-size:12px; font-weight:700; color:" + StyleHelper::textLight() + ";");
+        l->addWidget(label);
+        l->addStretch();
+        return header;
     }
     
     QPushButton* createTab(const QString& text, bool active) {
@@ -308,7 +433,12 @@ private:
     }
     
     
-    QWidget* createConversationRow(const QString& name, const QString& message, const QString& time, bool hasNotification, int conversationIndex) {
+    QWidget* createConversationRow(const QString& name,
+                                 const QString& meta,
+                                 const QString& message,
+                                 const QString& time,
+                                 bool hasNotification,
+                                 int conversationIndex) {
         QWidget* row = new QWidget();
         row->setFixedHeight(64);
         row->setCursor(Qt::PointingHandCursor);
@@ -371,11 +501,29 @@ private:
         
         QLabel* nameLabel = new QLabel(name);
         nameLabel->setStyleSheet("font-size:14px; font-weight:600; color:" + StyleHelper::black() + ";");
+
+        const QString metaText = meta.trimmed();
+        QLabel* metaLabel = nullptr;
+        if (!metaText.isEmpty() && metaText != QStringLiteral("—")) {
+            metaLabel = new QLabel(metaText);
+            metaLabel->setStyleSheet(
+                "background:" + StyleHelper::lightGray() + ";"
+                "color:" + StyleHelper::darkGray() + ";"
+                "border:1px solid " + StyleHelper::borderGray() + ";"
+                "border-radius:10px;"
+                "padding:1px 8px;"
+                "font-size:11px;"
+                "font-weight:600;"
+            );
+        }
         
         QLabel* timeLabel = new QLabel(time);
         timeLabel->setStyleSheet("font-size:11px; color:" + StyleHelper::textLight() + ";");
         
         topLayout->addWidget(nameLabel);
+        if (metaLabel) {
+            topLayout->addWidget(metaLabel);
+        }
         topLayout->addStretch();
         topLayout->addWidget(timeLabel);
         
@@ -417,6 +565,57 @@ private:
         rowLayout->addWidget(infoBlock, 1);
         
         return row;
+    }
+
+    QString initialsForName(const QString& name) const {
+        const QString trimmed = name.trimmed();
+        if (trimmed.isEmpty()) {
+            return QStringLiteral("?");
+        }
+        const QStringList parts = trimmed.split(' ', Qt::SkipEmptyParts);
+        if (parts.isEmpty()) {
+            return QStringLiteral("?");
+        }
+        if (parts.size() == 1) {
+            return parts[0].left(2).toUpper();
+        }
+        return (parts[0].left(1) + parts[1].left(1)).toUpper();
+    }
+
+    void updateProfileHeader() {
+        if (!m_profileAvatar || !m_profileName || !m_profileRole) {
+            return;
+        }
+
+        const User u = AuthService::instance().currentUser();
+        const QString username = u.username().trimmed();
+        const QString role = AuthService::instance().role().trimmed();
+
+        if (username.isEmpty()) {
+            m_profileName->setText(QStringLiteral("—"));
+            m_profileAvatar->setText(QStringLiteral("?"));
+        } else {
+            m_profileName->setText(username);
+            m_profileAvatar->setText(initialsForName(username));
+        }
+
+        if (role.isEmpty()) {
+            m_profileRole->hide();
+            m_profileRole->clear();
+        } else {
+            m_profileRole->setText(role);
+            m_profileRole->show();
+        }
+    }
+
+    void clearProfileHeader() {
+        if (!m_profileAvatar || !m_profileName || !m_profileRole) {
+            return;
+        }
+        m_profileName->setText(QStringLiteral("—"));
+        m_profileAvatar->setText(QStringLiteral("?"));
+        m_profileRole->hide();
+        m_profileRole->clear();
     }
     
     // Helper class pour rendre les widgets cliquables
@@ -896,8 +1095,33 @@ private:
     }
     
     void onMoreOptionsClicked() {
-        // TODO: Menu contextuel (Mute, Archive, Delete)
-        qDebug() << "More options clicked - À implémenter";
+        QMenu menu(this);
+        menu.setStyleSheet(
+            "QMenu {"
+            "  background:" + StyleHelper::white() + ";"
+            "  border:1px solid " + StyleHelper::borderGray() + ";"
+            "  padding:6px;"
+            "}"
+            "QMenu::item {"
+            "  padding:8px 12px;"
+            "  border-radius:8px;"
+            "  color:" + StyleHelper::black() + ";"
+            "}"
+            "QMenu::item:selected {"
+            "  background:" + StyleHelper::lightGray() + ";"
+            "}"
+        );
+
+        QAction* logout = menu.addAction(QStringLiteral("Déconnexion"));
+        QAction* picked = menu.exec(QCursor::pos());
+        if (!picked) {
+            return;
+        }
+
+        if (picked == logout) {
+            emit logoutRequested();
+            return;
+        }
     }
     
     void onAttachFileClicked() {
@@ -981,6 +1205,9 @@ private:
     QWidget* m_messagesPanel;
     QWidget* m_conversationsContainer;
     QLabel* m_errorBanner = nullptr;
+    QLabel* m_profileAvatar = nullptr;
+    QLabel* m_profileName = nullptr;
+    QLabel* m_profileRole = nullptr;
     QLineEdit* m_searchBox;
     QLineEdit* m_messageInput;
     QVBoxLayout* m_conversationsLayout;
